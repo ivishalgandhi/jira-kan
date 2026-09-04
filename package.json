@@ -1,6 +1,6 @@
 {
   "name": "jira-kan",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Local Kanban for jira-cli",
   "license": "MIT",
   "type": "module",
