@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { GripVerticalIcon, MoonIcon, SunIcon, XIcon } from "lucide-react";
 
 import type { Board, Card, Column, Epic } from "./board.ts";
-import { filterValue, mergeValue, rollbackColumns } from "./visible.ts";
+import { frameSrc } from "./open.ts";
+import { filterValue, mergeValue, rollbackColumns, stampEpic } from "./visible.ts";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -30,16 +31,8 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-function withDone(columns: Column[]): Column[] {
-  return columns.some((column) => column.title === "Done")
-    ? columns
-    : [...columns, { id: "Done", title: "Done", cards: [] }];
-}
-
 function toValue(columns: Column[]): Record<string, Card[]> {
-  return Object.fromEntries(
-    withDone(columns).map((column) => [column.title, column.cards]),
-  );
+  return Object.fromEntries(columns.map((column) => [column.title, column.cards]));
 }
 
 function readTheme(): Theme {
@@ -189,6 +182,9 @@ export function App() {
     () => filterValue(columns, selectedEpic),
     [columns, selectedEpic],
   );
+  const embed = openUrl
+    ? frameSrc(openUrl, window.location.origin)
+    : null;
 
   function applyBoard(next: Board) {
     setColumns(toValue(next.columns));
@@ -274,6 +270,25 @@ export function App() {
       .filter((card) => card.epic === key).length;
   }
 
+  async function selectEpic(key: string | null) {
+    setSelectedEpic(key);
+    if (!key) return;
+    if (childCount(key) > 0) return;
+    setBusy(true);
+    setError("");
+    try {
+      const data = await api<Board>("/api/epic", {
+        method: "POST",
+        body: JSON.stringify({ key }),
+      });
+      setColumns((current) => stampEpic(current, toValue(data.columns), key));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Epic list failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="bg-muted/40 flex h-screen flex-col">
       <header className="bg-background flex flex-wrap items-center gap-2 border-b px-6 py-3">
@@ -297,6 +312,7 @@ export function App() {
           {theme === "dark" ? <SunIcon /> : <MoonIcon />}
         </Button>
         {error ? (
+
           <p className="text-destructive w-full text-sm whitespace-pre-wrap">
             {error}
           </p>
@@ -316,7 +332,7 @@ export function App() {
                   ? "bg-accent text-accent-foreground"
                   : "hover:bg-muted"
               }`}
-              onClick={() => setSelectedEpic(null)}
+              onClick={() => void selectEpic(null)}
             >
               All stories
             </button>
@@ -329,10 +345,7 @@ export function App() {
                     ? "bg-accent text-accent-foreground"
                     : "hover:bg-muted"
                 }`}
-                onClick={() => {
-                  setSelectedEpic(epic.key);
-                  void open(epic.key);
-                }}
+                onClick={() => void selectEpic(epic.key)}
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium tabular-nums">
@@ -355,7 +368,12 @@ export function App() {
             restoreOnCancel
             onValueCommit={commit}
           >
-            <KanbanBoard className="grid auto-rows-fr grid-cols-3">
+            <KanbanBoard
+              className="grid auto-rows-fr"
+              style={{
+                gridTemplateColumns: `repeat(${Math.max(Object.keys(visible).length, 1)}, minmax(16rem, 1fr))`,
+              }}
+            >
               {Object.entries(visible).map(([title, cards]) => (
                 <StatusColumn
                   key={title}
@@ -409,15 +427,28 @@ export function App() {
                 <XIcon />
               </Button>
             </div>
-            <iframe
-              title={openKey ?? "Issue"}
-              src={openUrl}
-              className="min-h-0 w-full flex-1 border-0 bg-background"
-            />
+            {embed ? (
+              <iframe
+                title={openKey ?? "Issue"}
+                src={embed}
+                className="min-h-0 w-full flex-1 border-0 bg-background"
+              />
+            ) : (
+              <div className="text-muted-foreground flex flex-1 flex-col items-start gap-3 p-6 text-sm">
+                <p>Jira refuses to embed this page.</p>
+                <a
+                  className="text-foreground font-medium underline-offset-4 hover:underline"
+                  href={openUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open {openKey ?? "issue"} in Jira
+                </a>
+              </div>
+            )}
           </aside>
         ) : null}
       </div>
     </div>
   );
 }
-

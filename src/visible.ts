@@ -45,3 +45,30 @@ export function rollbackColumns(
 ) {
   return mergeValue(previousValue, current, epic);
 }
+
+export function stampEpic(
+  columns: Record<string, Card[]>,
+  children: Record<string, Card[]>,
+  epic: string,
+): Record<string, Card[]> {
+  const childKeys = new Set(
+    Object.values(children)
+      .flat()
+      .map((card) => card.key),
+  );
+  const titles = new Set([...Object.keys(columns), ...Object.keys(children)]);
+  return Object.fromEntries(
+    [...titles].map((title) => {
+      const current = columns[title] ?? [];
+      const incoming = children[title] ?? [];
+      const have = new Set(current.map((card) => card.key));
+      const stamped = current.map((card) =>
+        childKeys.has(card.key) ? { ...card, epic: card.epic ?? epic } : card,
+      );
+      const added = incoming
+        .filter((card) => !have.has(card.key))
+        .map((card) => ({ ...card, epic: card.epic ?? epic }));
+      return [title, [...stamped, ...added]];
+    }),
+  );
+}

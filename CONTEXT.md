@@ -25,7 +25,7 @@ A Jira project identified by its key. The Board shows one Project at a time.
 _Avoid_: repo, codebase (those are this tool)
 
 **Epic**:
-An Issue of type Epic. It lives in the left pane. Its children appear on the Board as Cards when the Scope includes them. Clicking an Epic shows only its children.
+An Issue of type Epic. It lives in the left pane. Its children appear on the Board as Cards when the Scope includes them. Clicking an Epic shows only its children. If the list payload has no Epic link, children are fetched with `parent` or `Epic Link`.
 _Avoid_: parent (jira-cli's `-P` flag name)
 
 **Scope**:
@@ -45,7 +45,7 @@ Changing an Issue's status from the Board by running `jira issue move`. The only
 _Avoid_: transition, drag (the gesture), update
 
 **Open**:
-Showing an Issue's Jira URL in the side pane. `jira open KEY` still resolves that URL.
+Showing an Issue's Jira URL in the side pane. `jira open KEY` still resolves that URL. Same-origin pages embed; remote Jira is a link because it refuses frames.
 _Avoid_: view, browse (when meaning this)
 
 **Write-back**:

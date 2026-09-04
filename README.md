@@ -11,7 +11,7 @@ bun run dev
 
 Opens `http://127.0.0.1:5173`. First paint is the Fixture. If `jira` is on PATH, the process then Refresh-es from your existing `jira init`. If not, Refresh and Move use the in-process store.
 
-- Left: Epics. Center: Cards. Right: Open URL.
+- Left: Epics. Center: Cards (one Column per status in the payload). Right: Open URL; remote Jira is a link, not an iframe.
 - Drop a Card on a Column to Move (`jira issue move`).
 - Same-Column drop and column reorder do nothing.
 - Theme is stored in `localStorage`.

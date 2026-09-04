@@ -127,3 +127,23 @@ test("Open returns the browse URL", async () => {
   const body = await res.json();
   expect(body.url).toBe("/browse/DEMO-1");
 });
+
+test("Epic children keep the Epic key", async () => {
+  const { base } = await listen();
+  const res = await fetch(`${base}/api/epic`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key: "DEMO-1" }),
+  });
+  const body = await res.json();
+  expect(
+    body.columns.flatMap((c: { cards: { key: string; epic?: string }[] }) =>
+      c.cards.map((card) => [card.key, card.epic]),
+    ),
+  ).toEqual([
+    ["DEMO-2", "DEMO-1"],
+    ["DEMO-4", "DEMO-1"],
+    ["DEMO-3", "DEMO-1"],
+    ["DEMO-5", "DEMO-1"],
+  ]);
+});

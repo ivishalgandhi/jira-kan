@@ -30,6 +30,10 @@ appendFileSync(${JSON.stringify(log)}, JSON.stringify({
 }) + "\\n");
 const [cmd, sub, key, status] = process.argv.slice(2);
 if (cmd === "issue" && sub === "list") {
+  if (process.argv.slice(2).some((arg) => String(arg).includes("EMPTY"))) {
+    console.error('✗ No result found for given query in project "SQLJIRA"');
+    process.exit(1);
+  }
   console.log(JSON.stringify([{
     key: "DEMO-1",
     fields: { summary: "from jira", status: { name: "To Do" } },
@@ -88,6 +92,26 @@ test("createJiraCli lists with flags and --raw", async () => {
     "-a",
     "user@test.com",
     "-s~Done",
+    "--raw",
+  ]);
+});
+
+test("createJiraCli treats an empty jira list as no Issues", async () => {
+  const { bin } = fakeJira();
+  const cli = createJiraCli({ bin });
+  expect(JSON.parse(await cli.list("-q EMPTY"))).toEqual([]);
+});
+
+test("createJiraCli lists Epic children with parent or Epic Link", async () => {
+  const { bin, calls } = fakeJira();
+  const cli = createJiraCli({ bin });
+  const raw = await cli.listEpic("DEMO-1");
+  expect(JSON.parse(raw)[0].key).toBe("DEMO-1");
+  expect(calls()[0].args).toEqual([
+    "issue",
+    "list",
+    "-q",
+    'parent="DEMO-1" OR "Epic Link"="DEMO-1"',
     "--raw",
   ]);
 });

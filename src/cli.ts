@@ -7,14 +7,23 @@ import type { IssueStore } from "./store.ts";
 
 export type Cli = {
   list(flags: string): Promise<string>;
+  listEpic(key: string): Promise<string>;
   move(key: string, status: string): Promise<{ ok: boolean; error?: string }>;
   open(key: string): Promise<string>;
 };
+
+function emptyList(text: string) {
+  return /no result found/i.test(text);
+}
 
 export function createStoreCli(store: IssueStore): Cli {
   return {
     async list(flags) {
       const issues = store.list(flagsToJql(flags || DEFAULT_FLAGS));
+      return JSON.stringify(issues, null, 2);
+    },
+    async listEpic(key) {
+      const issues = store.list(`project="DEMO" AND parent="${key}"`);
       return JSON.stringify(issues, null, 2);
     },
     async move(key, status) {
@@ -80,7 +89,24 @@ export function createJiraCli(
       const extra = (flags || DEFAULT_FLAGS).split(/\s+/).filter(Boolean);
       const result = await run(["issue", "list", ...extra, "--raw"]);
       if (result.code !== 0) {
-        throw new Error(result.stderr || result.stdout || "jira issue list failed");
+        const text = result.stderr || result.stdout || "jira issue list failed";
+        if (emptyList(text)) return "[]";
+        throw new Error(text);
+      }
+      return result.stdout;
+    },
+    async listEpic(key) {
+      const result = await run([
+        "issue",
+        "list",
+        "-q",
+        `parent="${key}" OR "Epic Link"="${key}"`,
+        "--raw",
+      ]);
+      if (result.code !== 0) {
+        const text = result.stderr || result.stdout || "jira issue list failed";
+        if (emptyList(text)) return "[]";
+        throw new Error(text);
       }
       return result.stdout;
     },

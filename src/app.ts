@@ -7,6 +7,7 @@ export type App = {
   flags: string;
   hydrate(raw: unknown): Board;
   refresh(flags?: string): Promise<Board>;
+  children(epic: string): Promise<Board>;
   board(): Board;
   move(
     key: string,
@@ -35,6 +36,15 @@ export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
       if (next !== undefined) flags = next;
       payload = JSON.parse(await cli.list(flags));
       return app.board();
+    },
+    async children(epic) {
+      const board = issuesToBoard(JSON.parse(await cli.listEpic(epic)));
+      for (const column of board.columns) {
+        for (const card of column.cards) {
+          if (!card.epic) card.epic = epic;
+        }
+      }
+      return board;
     },
     async move(key, status) {
       const current = (payload as { key?: string; fields?: { status?: { name?: string } } }[])

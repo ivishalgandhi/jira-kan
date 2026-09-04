@@ -81,3 +81,26 @@ test("hides a status that has no Issues", () => {
 
   expect(board.columns.map((column) => column.title)).toEqual(["To Do"]);
 });
+
+test("a child without parent has no Epic key", () => {
+  const board = issuesToBoard([
+    {
+      key: "SQLJIRA-2",
+      fields: {
+        summary: "Work story",
+        status: { name: "Proposed" },
+        issuetype: { name: "Story" },
+      },
+    },
+    {
+      key: "SQLJIRA-1",
+      fields: {
+        summary: "Work epic",
+        status: { name: "In Development" },
+        issuetype: { name: "Epic" },
+      },
+    },
+  ]);
+  expect(board.epics.map((epic) => epic.key)).toEqual(["SQLJIRA-1"]);
+  expect(board.columns[0].cards[0].epic).toBeUndefined();
+});

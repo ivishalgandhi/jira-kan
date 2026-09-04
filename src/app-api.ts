@@ -52,6 +52,14 @@ export function handleAppApi(
     return true;
   }
 
+  if (url.pathname === "/api/epic" && method === "POST") {
+    void readBody(req).then(async (text) => {
+      const body = text ? JSON.parse(text) : {};
+      json(res, 200, await app.children(String(body.key ?? "")));
+    });
+    return true;
+  }
+
   if (url.pathname === "/api/open" && method === "POST") {
     void readBody(req).then(async (text) => {
       const body = text ? JSON.parse(text) : {};
