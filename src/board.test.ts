@@ -41,6 +41,7 @@ test("Epics leave the Board and children keep the Epic key", () => {
   expect(board.epics[0]).toEqual({
     key: "DEMO-1",
     summary: "Ship a local kanban",
+    status: "To Do",
     priority: "High",
     assignee: "Person A",
     dueDate: "Sep 10, 2026",
@@ -159,6 +160,20 @@ test("a child without parent has no Epic key", () => {
   ]);
   expect(board.epics.map((epic) => epic.key)).toEqual(["SQLJIRA-1"]);
   expect(board.columns[0].cards[0].epic).toBeUndefined();
+});
+
+test("Epics keep status from the payload", () => {
+  const board = issuesToBoard([
+    {
+      key: "DEMO-8",
+      fields: {
+        summary: "Done work",
+        status: { name: "Completed" },
+        issuetype: { name: "Epic" },
+      },
+    },
+  ]);
+  expect(board.epics[0].status).toBe("Completed");
 });
 
 test("mergeEpics keeps listed Epics that Scope missed", () => {

@@ -54,9 +54,21 @@ export function filterValue(
   );
 }
 
+const hiddenEpicStatus = new Set([
+  "in progress",
+  "completed",
+  "cancelled",
+  "canceled",
+]);
+
+export function epicInPane(epic: Epic) {
+  return !hiddenEpicStatus.has((epic.status ?? "").toLowerCase());
+}
+
 export function filterEpics(epics: Epic[], cards: Card[], query: string) {
-  if (!needle(query)) return epics;
-  return epics.filter(
+  const pane = epics.filter(epicInPane);
+  if (!needle(query)) return pane;
+  return pane.filter(
     (epic) =>
       epicMatches(epic, query) ||
       cards.some((card) => card.epic === epic.key && cardMatches(card, query)),

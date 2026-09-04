@@ -25,7 +25,7 @@ A Jira project identified by its key. The Board shows one Project at a time.
 _Avoid_: repo, codebase (those are this tool)
 
 **Epic**:
-An Issue of type Epic. It lives in the left pane. The pane lists every Epic from `jira issue list -tEpic`, not only those in the current Scope. Its children appear on the Board as Cards when the Scope includes them. Clicking an Epic shows only its children. If the list payload has no Epic link, children are fetched with `parent` or `Epic Link`.
+An Issue of type Epic. It lives in the left pane. The pane lists every Epic from `jira issue list -tEpic`, not only those in the current Scope, except Epics whose status is In Progress, Completed, or Cancelled. Its children appear on the Board as Cards when the Scope includes them. Clicking an Epic shows only its children. If the list payload has no Epic link, children are fetched with `parent` or `Epic Link`.
 _Avoid_: parent (jira-cli's `-P` flag name)
 
 **Scope**:

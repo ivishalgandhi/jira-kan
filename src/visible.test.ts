@@ -124,3 +124,15 @@ test("Search keeps an Epic that matches or has a matching Card", () => {
     otherEpic,
   ]);
 });
+
+test("left pane hides In Progress, Completed, and Cancelled Epics", () => {
+  const open: Epic = { key: "DEMO-1", summary: "Open", status: "To Do" };
+  const progress: Epic = { key: "DEMO-8", summary: "Busy", status: "In Progress" };
+  const done: Epic = { key: "DEMO-9", summary: "Finished", status: "Completed" };
+  const cancelled: Epic = { key: "DEMO-10", summary: "Dropped", status: "Cancelled" };
+  const unknown: Epic = { key: "DEMO-11", summary: "Parent only" };
+  expect(filterEpics([open, progress, done, cancelled, unknown], [], "")).toEqual([
+    open,
+    unknown,
+  ]);
+});

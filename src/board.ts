@@ -1,6 +1,7 @@
 export type Epic = {
   key: string;
   summary: string;
+  status?: string;
   priority?: string;
   assignee?: string;
   dueDate?: string;
@@ -111,9 +112,16 @@ function issueLabels(fields: RawIssue["fields"]): string[] | undefined {
   return labels.length > 0 ? labels : undefined;
 }
 
+function issueStatus(fields: RawIssue["fields"]): string | undefined {
+  return typeof fields?.status?.name === "string" && fields.status.name
+    ? fields.status.name
+    : undefined;
+}
+
 function toEpic(face: {
   key: string;
   summary: string;
+  status?: string;
   priority?: string;
   assignee?: string;
   dueDate?: string;
@@ -121,6 +129,7 @@ function toEpic(face: {
   return {
     key: face.key,
     summary: face.summary,
+    ...(face.status ? { status: face.status } : {}),
     ...(face.priority ? { priority: face.priority } : {}),
     ...(face.assignee ? { assignee: face.assignee } : {}),
     ...(face.dueDate ? { dueDate: face.dueDate } : {}),
@@ -188,7 +197,7 @@ export function issuesToBoard(raw: unknown): Board {
 
     const card = toCard(issue, key);
     if ((card.type ?? "").toLowerCase() === "epic") {
-      rememberEpic(toEpic(card));
+      rememberEpic(toEpic({ ...card, status: issueStatus(issue.fields) }));
       continue;
     }
 
