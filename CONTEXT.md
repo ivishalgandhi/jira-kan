@@ -51,3 +51,11 @@ _Avoid_: view, browse (when meaning this)
 **Write-back**:
 Changing Jira from the Board, only by running jira-cli. Never a direct Jira API call from this app.
 _Avoid_: sync, persist, save (when meaning a Jira mutation)
+
+**Fixture**:
+Checked-in fake `jira issue list --raw` JSON that seeds the Board and the Fake Jira when no Pipe is given.
+_Avoid_: mock, stub, sample (when meaning this file)
+
+**Fake Jira**:
+A local HTTP stand-in for Jira's REST API so jira-cli can be tested without a real site.
+_Avoid_: mock Jira, stub API
