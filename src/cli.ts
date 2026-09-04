@@ -7,6 +7,7 @@ import type { IssueStore } from "./store.ts";
 
 export type Cli = {
   list(flags: string): Promise<string>;
+  listEpics(): Promise<string>;
   listEpic(key: string): Promise<string>;
   move(key: string, status: string): Promise<{ ok: boolean; error?: string }>;
   open(key: string): Promise<string>;
@@ -20,6 +21,10 @@ export function createStoreCli(store: IssueStore): Cli {
   return {
     async list(flags) {
       const issues = store.list(flagsToJql(flags || DEFAULT_FLAGS));
+      return JSON.stringify(issues, null, 2);
+    },
+    async listEpics() {
+      const issues = store.list(flagsToJql("-tEpic"));
       return JSON.stringify(issues, null, 2);
     },
     async listEpic(key) {
@@ -88,6 +93,15 @@ export function createJiraCli(
     async list(flags) {
       const extra = (flags || DEFAULT_FLAGS).split(/\s+/).filter(Boolean);
       const result = await run(["issue", "list", ...extra, "--raw"]);
+      if (result.code !== 0) {
+        const text = result.stderr || result.stdout || "jira issue list failed";
+        if (emptyList(text)) return "[]";
+        throw new Error(text);
+      }
+      return result.stdout;
+    },
+    async listEpics() {
+      const result = await run(["issue", "list", "-tEpic", "--raw"]);
       if (result.code !== 0) {
         const text = result.stderr || result.stdout || "jira issue list failed";
         if (emptyList(text)) return "[]";

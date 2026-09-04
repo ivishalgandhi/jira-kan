@@ -12,3 +12,7 @@ test("Scope flags still add assignee and status", () => {
     'project="DEMO" AND assignee="user@test.com" AND status!="Done"',
   );
 });
+
+test("Scope type flag lists Epics", () => {
+  expect(flagsToJql("-tEpic")).toBe('project="DEMO" AND type="Epic"');
+});

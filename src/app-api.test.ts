@@ -7,6 +7,7 @@ import { afterEach, expect, test } from "vitest";
 import { createApp } from "./app.ts";
 import { handleAppApi } from "./app-api.ts";
 import type { RawIssue } from "./board.ts";
+import type { Cli } from "./cli.ts";
 import { IssueStore } from "./store.ts";
 
 const fixture = JSON.parse(
@@ -22,8 +23,8 @@ afterEach(() => {
   while (servers.length) servers.pop()?.close();
 });
 
-async function listen(store = IssueStore.fromRaw(fixture)) {
-  const app = createApp({ store });
+async function listen(store = IssueStore.fromRaw(fixture), cli?: Cli) {
+  const app = createApp({ store, cli });
   await app.refresh();
   const server = createServer((req, res) => {
     if (!handleAppApi(req, res, app)) {
@@ -145,5 +146,57 @@ test("Epic children keep the Epic key", async () => {
     ["DEMO-4", "DEMO-1"],
     ["DEMO-3", "DEMO-1"],
     ["DEMO-5", "DEMO-1"],
+  ]);
+});
+
+test("Board.epics come from the Epic list, not only Scope", async () => {
+  const cli: Cli = {
+    async list() {
+      return JSON.stringify([
+        {
+          key: "SQLJIRA-2",
+          fields: {
+            summary: "Story",
+            status: { name: "Proposed" },
+            issuetype: { name: "Story" },
+          },
+        },
+      ]);
+    },
+    async listEpics() {
+      return JSON.stringify([
+        {
+          key: "SQLJIRA-1",
+          fields: {
+            summary: "One",
+            status: { name: "In Development" },
+            issuetype: { name: "Epic" },
+          },
+        },
+        {
+          key: "SQLJIRA-9",
+          fields: {
+            summary: "Nine",
+            status: { name: "Proposed" },
+            issuetype: { name: "Epic" },
+          },
+        },
+      ]);
+    },
+    async listEpic() {
+      return "[]";
+    },
+    async move() {
+      return { ok: true };
+    },
+    async open() {
+      return "/browse/X";
+    },
+  };
+  const { base } = await listen(IssueStore.fromRaw(fixture), cli);
+  const board = await (await fetch(`${base}/api/board`)).json();
+  expect(board.epics.map((epic: { key: string }) => epic.key)).toEqual([
+    "SQLJIRA-1",
+    "SQLJIRA-9",
   ]);
 });

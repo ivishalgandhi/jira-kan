@@ -1,4 +1,4 @@
-import { issuesToBoard, type Board } from "./board.ts";
+import { issuesToBoard, mergeEpics, type Board } from "./board.ts";
 import { createStoreCli, type Cli } from "./cli.ts";
 import { DEFAULT_FLAGS } from "./flags.ts";
 import { IssueStore } from "./store.ts";
@@ -20,21 +20,32 @@ export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
   const cli = opts.cli ?? createStoreCli(opts.store);
   let flags = DEFAULT_FLAGS;
   let payload: unknown[] = [];
+  let epicsPayload: unknown[] = [];
 
   const app: App = {
     get flags() {
       return flags;
     },
     board() {
-      return issuesToBoard(payload);
+      const board = issuesToBoard(payload);
+      return {
+        columns: board.columns,
+        epics: mergeEpics(issuesToBoard(epicsPayload).epics, board.epics),
+      };
     },
     hydrate(raw) {
       payload = Array.isArray(raw) ? raw : [];
+      epicsPayload = [];
       return app.board();
     },
     async refresh(next) {
       if (next !== undefined) flags = next;
-      payload = JSON.parse(await cli.list(flags));
+      const [issues, epics] = await Promise.all([
+        cli.list(flags),
+        cli.listEpics(),
+      ]);
+      payload = JSON.parse(issues);
+      epicsPayload = JSON.parse(epics);
       return app.board();
     },
     async children(epic) {

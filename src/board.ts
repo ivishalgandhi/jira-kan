@@ -156,3 +156,17 @@ export function issuesToBoard(raw: unknown): Board {
 
   return { columns, epics };
 }
+
+export function mergeEpics(listed: Epic[], fromBoard: Epic[]): Epic[] {
+  const byKey = new Map<string, Epic>();
+  for (const epic of listed) byKey.set(epic.key, { ...epic });
+  for (const epic of fromBoard) {
+    const existing = byKey.get(epic.key);
+    if (!existing) {
+      byKey.set(epic.key, { ...epic });
+      continue;
+    }
+    if (!existing.summary && epic.summary) Object.assign(existing, epic);
+  }
+  return [...byKey.values()];
+}

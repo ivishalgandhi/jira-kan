@@ -20,6 +20,7 @@ export function flagsToJql(flags: string): string {
   const list = tokens(flags.trim() || DEFAULT_FLAGS);
   let assignee = "";
   let epic = "";
+  let type = "";
   let raw = "";
   const statusEq: string[] = [];
   const statusNeq: string[] = [];
@@ -33,6 +34,10 @@ export function flagsToJql(flags: string): string {
     }
     if (token.startsWith("-P")) {
       [epic, i] = takeValue(list, i, "-P");
+      continue;
+    }
+    if (token.startsWith("-t")) {
+      [type, i] = takeValue(list, i, "-t");
       continue;
     }
     if (token.startsWith("-s")) {
@@ -55,6 +60,7 @@ export function flagsToJql(flags: string): string {
 
   const clauses = ['project="DEMO"'];
   if (assignee) clauses.push(`assignee="${assignee}"`);
+  if (type) clauses.push(`type="${type}"`);
   if (epic) clauses.push(`parent="${epic}"`);
   for (const status of statusEq) clauses.push(`status="${status}"`);
   for (const status of statusNeq) clauses.push(`status!="${status}"`);

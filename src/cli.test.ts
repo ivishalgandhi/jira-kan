@@ -102,6 +102,14 @@ test("createJiraCli treats an empty jira list as no Issues", async () => {
   expect(JSON.parse(await cli.list("-q EMPTY"))).toEqual([]);
 });
 
+test("createJiraCli lists every Epic with -tEpic", async () => {
+  const { bin, calls } = fakeJira();
+  const cli = createJiraCli({ bin });
+  const raw = await cli.listEpics();
+  expect(JSON.parse(raw)[0].key).toBe("DEMO-1");
+  expect(calls()[0].args).toEqual(["issue", "list", "-tEpic", "--raw"]);
+});
+
 test("createJiraCli lists Epic children with parent or Epic Link", async () => {
   const { bin, calls } = fakeJira();
   const cli = createJiraCli({ bin });

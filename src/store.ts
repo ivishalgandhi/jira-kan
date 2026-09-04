@@ -42,6 +42,18 @@ function fieldValue(issue: StoredIssue, field: string): string {
       return issue.fields.status.name;
     case "parent":
       return issue.fields.parent?.key ?? "";
+    case "type": {
+      const named = issue.fields.issuetype ?? issue.fields.issueType;
+      if (
+        named &&
+        typeof named === "object" &&
+        "name" in named &&
+        typeof named.name === "string"
+      ) {
+        return named.name;
+      }
+      return "";
+    }
     case "key":
       return issue.key;
     default:

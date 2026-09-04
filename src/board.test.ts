@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, expectTypeOf, test } from "vitest";
 
-import { issuesToBoard, type Board, type Card, type Epic, type RawIssue } from "./board.ts";
+import { issuesToBoard, mergeEpics, type Board, type Card, type Epic, type RawIssue } from "./board.ts";
 
 const fixture = JSON.parse(
   readFileSync(
@@ -103,4 +103,16 @@ test("a child without parent has no Epic key", () => {
   ]);
   expect(board.epics.map((epic) => epic.key)).toEqual(["SQLJIRA-1"]);
   expect(board.columns[0].cards[0].epic).toBeUndefined();
+});
+
+test("mergeEpics keeps listed Epics that Scope missed", () => {
+  expect(
+    mergeEpics(
+      [
+        { key: "SQLJIRA-1", summary: "One" },
+        { key: "SQLJIRA-9", summary: "Nine" },
+      ],
+      [{ key: "SQLJIRA-1", summary: "SQLJIRA-1" }],
+    ).map((epic) => epic.key),
+  ).toEqual(["SQLJIRA-1", "SQLJIRA-9"]);
 });
