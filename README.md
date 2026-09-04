@@ -67,3 +67,18 @@ Pipe is the first Board. Refresh and Move still go through `jira` when it is on 
 bun test
 bun run typecheck
 ```
+
+## Version
+
+Pushes to `main` run tests, then [semantic-release](https://semantic-release.gitbook.io). It reads conventional commits since the last `v*` tag:
+
+| Commit | Bump |
+| --- | --- |
+| `fix:` | patch (`0.1.0` → `0.1.1`) |
+| `feat:` | minor (`0.1.0` → `0.2.0`) |
+| `feat!:` or `BREAKING CHANGE:` | major |
+| `docs:`, `chore:`, `test:` | none |
+
+It writes `package.json`, tags `vX.Y.Z`, and opens a GitHub Release. The package is private; nothing is published to npm.
+
+First Board is tagged `v0.1.0`. Later `fix:` / `feat:` commits on `main` bump from there. Without a `v*` tag the first release is `1.0.0`.
