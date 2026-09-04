@@ -40,6 +40,7 @@ export type RawIssue = {
     issueType?: { name?: unknown };
     parent?: { key?: unknown };
     labels?: unknown;
+    components?: unknown;
   };
 };
 
@@ -66,12 +67,21 @@ function epicKey(fields: RawIssue["fields"]): string | undefined {
   return typeof fields?.parent?.key === "string" ? fields.parent.key : undefined;
 }
 
+function labelName(item: unknown): string | undefined {
+  if (typeof item === "string" && item) return item;
+  if (item && typeof item === "object" && "name" in item) {
+    const name = (item as { name?: unknown }).name;
+    if (typeof name === "string" && name) return name;
+  }
+  return undefined;
+}
+
 function issueLabels(fields: RawIssue["fields"]): string[] | undefined {
-  const raw = fields?.labels;
-  if (!Array.isArray(raw)) return undefined;
-  const labels = raw.filter(
-    (item): item is string => typeof item === "string" && item.length > 0,
-  );
+  const raw = [
+    ...(Array.isArray(fields?.labels) ? fields.labels : []),
+    ...(Array.isArray(fields?.components) ? fields.components : []),
+  ];
+  const labels = [...new Set(raw.map(labelName).filter((name): name is string => !!name))];
   return labels.length > 0 ? labels : undefined;
 }
 

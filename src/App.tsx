@@ -124,7 +124,7 @@ function IssueCard({
             {card.labels.map((label) => (
               <Badge
                 key={label}
-                variant="outline"
+                variant="primary-light"
                 className="pointer-events-none h-5 rounded-full px-2 text-xs"
               >
                 {label}

@@ -75,9 +75,18 @@ test("Cards keep labels from the payload", () => {
         labels: [],
       },
     },
+    {
+      key: "DEMO-7",
+      fields: {
+        summary: "Components only",
+        status: { name: "To Do" },
+        components: [{ name: "parser" }, { name: "cli" }],
+      },
+    },
   ]);
   expect(board.columns[0].cards[0].labels).toEqual(["kanban", "scope"]);
   expect(board.columns[0].cards[1].labels).toBeUndefined();
+  expect(board.columns[0].cards[2].labels).toEqual(["parser", "cli"]);
 });
 
 test("parent-only payload still names the Epic", () => {
