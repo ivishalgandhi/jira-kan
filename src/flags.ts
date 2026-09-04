@@ -1,6 +1,4 @@
-import { ME } from "./store.ts";
-
-export const DEFAULT_FLAGS = `-a ${ME.emailAddress} -s~Done`;
+export const DEFAULT_FLAGS = "";
 
 function tokens(input: string): string[] {
   const out: string[] = [];

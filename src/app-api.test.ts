@@ -38,24 +38,25 @@ async function listen(store = IssueStore.fromRaw(fixture)) {
   return { base: `http://127.0.0.1:${addr.port}`, app };
 }
 
-test("default Board is mine and not Done", async () => {
+test("default Board is the Project", async () => {
   const { base } = await listen();
   const board = await (await fetch(`${base}/api/board`)).json();
   expect(board.columns.map((c: { title: string }) => c.title)).toEqual([
     "To Do",
     "In Progress",
+    "Done",
   ]);
   expect(
     board.columns.flatMap((c: { cards: { key: string }[] }) =>
       c.cards.map((card) => card.key),
     ),
-  ).toEqual(["DEMO-2", "DEMO-4", "DEMO-3"]);
-  expect(board.epics.map((card: { key: string }) => card.key)).toEqual([
+  ).toEqual(["DEMO-2", "DEMO-4", "DEMO-6", "DEMO-3", "DEMO-5"]);
+  expect(board.epics.map((epic: { key: string }) => epic.key)).toEqual([
     "DEMO-1",
   ]);
 });
 
-test("successful Move Refresh-es and drops Done", async () => {
+test("successful Move Refresh-es and keeps Done", async () => {
   const { base } = await listen();
   const res = await fetch(`${base}/api/move`, {
     method: "POST",
@@ -68,7 +69,7 @@ test("successful Move Refresh-es and drops Done", async () => {
     body.board.columns.flatMap((c: { cards: { key: string }[] }) =>
       c.cards.map((card) => card.key),
     ),
-  ).toEqual(["DEMO-2", "DEMO-4"]);
+  ).toEqual(["DEMO-2", "DEMO-4", "DEMO-6", "DEMO-3", "DEMO-5"]);
 });
 
 test("illegal Move snaps back with jira-cli stderr", async () => {

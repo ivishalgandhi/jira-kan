@@ -29,7 +29,7 @@ An Issue of type Epic. It lives in the left pane. Its children appear on the Boa
 _Avoid_: parent (jira-cli's `-P` flag name)
 
 **Scope**:
-The jira-cli list invocation that fills the Board. The default Scope is Issues assigned to you that are not Done.
+The jira-cli list invocation that fills the Board. The default Scope is the current jira-cli Project.
 _Avoid_: filter, view, query (when meaning this)
 
 **Pipe**:

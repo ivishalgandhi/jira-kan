@@ -147,7 +147,7 @@ test("boot without jira uses the store", async () => {
   expect(kind).toBe("store");
   expect(
     app.board().columns.flatMap((column) => column.cards.map((card) => card.key)),
-  ).toEqual(["DEMO-2", "DEMO-4", "DEMO-3"]);
+  ).toEqual(["DEMO-2", "DEMO-4", "DEMO-6", "DEMO-3", "DEMO-5"]);
 });
 
 test("boot with jira first-paints from the store then Refresh shells jira", async () => {
@@ -159,7 +159,7 @@ test("boot with jira first-paints from the store then Refresh shells jira", asyn
   expect(kind).toBe("jira");
   expect(
     app.board().columns.flatMap((column) => column.cards.map((card) => card.key)),
-  ).toEqual(["DEMO-2", "DEMO-4", "DEMO-3"]);
+  ).toEqual(["DEMO-2", "DEMO-4", "DEMO-6", "DEMO-3", "DEMO-5"]);
 
   await refreshFromJira(app, kind);
   expect(

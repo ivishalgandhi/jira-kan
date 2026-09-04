@@ -27,7 +27,7 @@ export JIRA_API_TOKEN=...   # only if jira-cli does not already have it
 bun run dev
 ```
 
-Change the Scope flags from `-a user@test.com -s~Done` to your assignee or project, then Refresh.
+Scope flags start empty. Add `-a you@work.com` or `-s~Done` if you want a tighter list, then Refresh.
 
 ## Fake Jira
 
@@ -40,7 +40,7 @@ JIRA_CONFIG_FILE=./fixtures/jira.config.yml JIRA_API_TOKEN=fake bun run dev
 ## Pipe
 
 ```sh
-jira issue list -a you@work.com -s~Done --raw | bun run dev
+jira issue list --raw | bun run dev
 ```
 
 Pipe is the first Board. Refresh and Move still go through `jira` when it is on PATH.
