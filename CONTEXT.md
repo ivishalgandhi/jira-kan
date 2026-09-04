@@ -9,7 +9,7 @@ A Jira work item identified by its key.
 _Avoid_: ticket, item, task (when meaning the Jira record)
 
 **Card**:
-The Board representation of one Issue. It shows the Issue key and summary, and when the payload has them, priority, assignee, and due date.
+The Board representation of one Issue. It shows the Issue key and summary, and when the payload has them, priority, assignee, due date, and labels.
 _Avoid_: tile, chip
 
 **Column**:

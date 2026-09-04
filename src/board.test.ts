@@ -53,7 +53,31 @@ test("Epics leave the Board and children keep the Epic key", () => {
     priority: "High",
     assignee: "Person A",
     dueDate: "Aug 25, 2026",
+    labels: ["kanban", "write-back"],
   });
+});
+
+test("Cards keep labels from the payload", () => {
+  const board = issuesToBoard([
+    {
+      key: "DEMO-2",
+      fields: {
+        summary: "Labeled",
+        status: { name: "To Do" },
+        labels: ["kanban", "scope"],
+      },
+    },
+    {
+      key: "DEMO-4",
+      fields: {
+        summary: "Unlabeled",
+        status: { name: "To Do" },
+        labels: [],
+      },
+    },
+  ]);
+  expect(board.columns[0].cards[0].labels).toEqual(["kanban", "scope"]);
+  expect(board.columns[0].cards[1].labels).toBeUndefined();
 });
 
 test("parent-only payload still names the Epic", () => {

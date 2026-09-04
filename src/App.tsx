@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { GripVerticalIcon, MoonIcon, SunIcon, XIcon } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import {
+  ChevronDownIcon,
+  GripVerticalIcon,
+  MoonIcon,
+  SunIcon,
+  XIcon,
+} from "lucide-react";
 
 import type { Board, Card, Column, Epic } from "./board.ts";
 import { frameSrc } from "./open.ts";
@@ -8,6 +14,11 @@ import { Avatar, AvatarFallback } from "~/components/ui/avatar";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card as UiCard, CardContent, CardHeader } from "~/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "~/components/ui/collapsible";
 import {
   Kanban,
   KanbanBoard,
@@ -19,6 +30,12 @@ import {
   KanbanOverlay,
   type KanbanCommitMeta,
 } from "~/components/ui/kanban";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "~/components/ui/resizable";
+import { cn } from "~/lib/utils";
 
 type BoardPayload = Board & { flags?: string };
 type Theme = "light" | "dark";
@@ -68,40 +85,48 @@ function IssueCard({
   onOpen?: () => void;
 }) {
   const body = (
-    <UiCard className="gap-0 py-4 shadow-sm">
-      <CardContent className="space-y-2.5">
-        <div className="flex items-center justify-between gap-2">
-          <span className="line-clamp-1 text-sm font-medium">{card.summary}</span>
+    <UiCard className="gap-3 py-3 shadow-sm">
+      <CardContent className="space-y-3">
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-muted-foreground text-xs font-medium tabular-nums">
+            {card.key}
+          </span>
           {card.priority ? (
             <Badge
               variant={priorityVariant(card.priority)}
-              className="pointer-events-none h-5 shrink-0 rounded-sm px-1.5 text-xs capitalize"
+              className="pointer-events-none h-5 shrink-0 rounded-full px-2 text-xs capitalize"
             >
               {card.priority}
             </Badge>
-          ) : (
-            <Badge
-              variant="outline"
-              className="pointer-events-none h-5 shrink-0 rounded-sm px-1.5 text-xs"
-            >
-              {card.key}
-            </Badge>
-          )}
+          ) : null}
         </div>
-        <div className="text-muted-foreground flex items-center justify-between text-xs">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <span className="shrink-0 font-medium tabular-nums">{card.key}</span>
+        <p className="text-sm leading-5 font-medium text-pretty">{card.summary}</p>
+        {card.labels?.length ? (
+          <div className="flex flex-wrap gap-1">
+            {card.labels.map((label) => (
+              <Badge
+                key={label}
+                variant="outline"
+                className="pointer-events-none h-5 rounded-full px-2 text-xs"
+              >
+                {label}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+        <div className="text-muted-foreground flex items-center justify-between gap-2 text-xs">
+          <div className="flex min-w-0 items-center gap-2">
             {card.assignee ? (
               <>
-                <Avatar>
+                <Avatar className="size-5 text-[10px]">
                   <AvatarFallback>{card.assignee.charAt(0)}</AvatarFallback>
                 </Avatar>
-                <span className="line-clamp-1">{card.assignee}</span>
+                <span className="truncate">{card.assignee}</span>
               </>
             ) : null}
           </div>
           {card.dueDate ? (
-            <time className="text-[10px] whitespace-nowrap tabular-nums">
+            <time className="shrink-0 whitespace-nowrap tabular-nums">
               {card.dueDate}
             </time>
           ) : null}
@@ -134,35 +159,63 @@ function StatusColumn({
   disabled?: boolean;
   onOpen?: (key: string) => void;
 }) {
+  const [open, setOpen] = useState(true);
   return (
-    <KanbanColumn value={title}>
-      <UiCard className="mb-2.5 h-full">
-        <CardHeader className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <span className="text-sm font-semibold">{title}</span>
-            <Badge variant="outline">{cards.length}</Badge>
-          </div>
-          <KanbanColumnHandle className="opacity-100">
-            <Button size="icon-xs" variant="ghost" tabIndex={-1} type="button">
-              <GripVerticalIcon />
-            </Button>
-          </KanbanColumnHandle>
-        </CardHeader>
-        <CardContent>
-          <KanbanColumnContent value={title} className="flex flex-col gap-2.5">
-            {cards.map((card) => (
-              <IssueCard
-                key={card.key}
-                card={card}
-                asHandle={!isOverlay}
-                isOverlay={isOverlay}
-                disabled={disabled}
-                onOpen={() => onOpen?.(card.key)}
-              />
-            ))}
-          </KanbanColumnContent>
-        </CardContent>
-      </UiCard>
+    <KanbanColumn value={title} className="h-full min-h-0">
+      <Collapsible
+        open={open}
+        onOpenChange={setOpen}
+        className={cn("flex h-full min-h-0 flex-col", !open && "h-auto")}
+      >
+        <UiCard
+          className={cn(
+            "mb-2.5 flex flex-col",
+            open ? "h-full min-h-0" : "h-auto",
+          )}
+        >
+          <CardHeader className="flex items-center justify-between">
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="flex min-w-0 items-center gap-2.5 text-left"
+              >
+                <ChevronDownIcon
+                  className={cn(
+                    "size-4 shrink-0 transition-transform",
+                    !open && "-rotate-90",
+                  )}
+                />
+                <span className="truncate text-sm font-semibold">{title}</span>
+                <Badge variant="outline">{cards.length}</Badge>
+              </button>
+            </CollapsibleTrigger>
+            <KanbanColumnHandle className="opacity-100">
+              <Button size="icon-xs" variant="ghost" tabIndex={-1} type="button">
+                <GripVerticalIcon />
+              </Button>
+            </KanbanColumnHandle>
+          </CardHeader>
+          <CollapsibleContent className="min-h-0 flex-1 overflow-hidden">
+            <CardContent className="h-full overflow-auto">
+              <KanbanColumnContent
+                value={title}
+                className="flex flex-col gap-2.5 pb-1"
+              >
+                {cards.map((card) => (
+                  <IssueCard
+                    key={card.key}
+                    card={card}
+                    asHandle={!isOverlay}
+                    isOverlay={isOverlay}
+                    disabled={disabled}
+                    onOpen={() => onOpen?.(card.key)}
+                  />
+                ))}
+              </KanbanColumnContent>
+            </CardContent>
+          </CollapsibleContent>
+        </UiCard>
+      </Collapsible>
     </KanbanColumn>
   );
 }
@@ -312,143 +365,183 @@ export function App() {
           {theme === "dark" ? <SunIcon /> : <MoonIcon />}
         </Button>
         {error ? (
-
           <p className="text-destructive w-full text-sm whitespace-pre-wrap">
             {error}
           </p>
         ) : null}
       </header>
-      <div className="flex min-h-0 flex-1">
-        <aside className="bg-background flex w-72 shrink-0 flex-col border-r">
-          <div className="flex items-center justify-between px-4 py-3">
-            <span className="text-sm font-semibold">Epics</span>
-            <Badge variant="outline">{epics.length}</Badge>
-          </div>
-          <nav className="flex flex-1 flex-col gap-1 overflow-auto px-2 pb-3">
-            <button
-              type="button"
-              className={`rounded-md px-3 py-2 text-left text-sm ${
-                selectedEpic === null
-                  ? "bg-accent text-accent-foreground"
-                  : "hover:bg-muted"
-              }`}
-              onClick={() => void selectEpic(null)}
-            >
-              All stories
-            </button>
-            {epics.map((epic) => (
+      <ResizablePanelGroup
+        id="shell"
+        orientation="horizontal"
+        className="min-h-0 flex-1"
+      >
+        <ResizablePanel
+          id="epics"
+          defaultSize="20%"
+          minSize="12rem"
+          maxSize="40%"
+          className="min-h-0"
+        >
+          <aside className="bg-background flex h-full min-h-0 flex-col border-r">
+            <div className="flex items-center justify-between px-4 py-3">
+              <span className="text-sm font-semibold">Epics</span>
+              <Badge variant="outline">{epics.length}</Badge>
+            </div>
+            <nav className="flex flex-1 flex-col gap-1 overflow-auto px-2 pb-3">
               <button
-                key={epic.key}
                 type="button"
-                className={`rounded-md px-3 py-2 text-left ${
-                  selectedEpic === epic.key
+                className={`rounded-md px-3 py-2 text-left text-sm ${
+                  selectedEpic === null
                     ? "bg-accent text-accent-foreground"
                     : "hover:bg-muted"
                 }`}
-                onClick={() => void selectEpic(epic.key)}
+                onClick={() => void selectEpic(null)}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium tabular-nums">
-                    {epic.key}
-                  </span>
-                  <Badge variant="outline">{childCount(epic.key)}</Badge>
-                </div>
-                <span className="mt-1 line-clamp-2 text-sm">{epic.summary}</span>
+                All stories
               </button>
-            ))}
-          </nav>
-        </aside>
-        <main className="min-h-0 min-w-0 flex-1 overflow-auto p-6">
-          <Kanban
-            value={visible}
-            onValueChange={(next) =>
-              setColumns((previous) => mergeValue(next, previous, selectedEpic))
-            }
-            getItemValue={(card) => card.key}
-            restoreOnCancel
-            onValueCommit={commit}
-          >
-            <KanbanBoard
-              className="grid auto-rows-fr"
-              style={{
-                gridTemplateColumns: `repeat(${Math.max(Object.keys(visible).length, 1)}, minmax(16rem, 1fr))`,
-              }}
-            >
-              {Object.entries(visible).map(([title, cards]) => (
-                <StatusColumn
-                  key={title}
-                  title={title}
-                  cards={cards}
-                  disabled={busy}
-                  onOpen={(key) => void open(key)}
-                />
-              ))}
-            </KanbanBoard>
-            <KanbanOverlay>
-              {({ value, variant }) => {
-                if (variant === "column") {
-                  return (
-                    <StatusColumn
-                      title={String(value)}
-                      cards={visible[String(value)] ?? []}
-                      isOverlay
-                    />
-                  );
-                }
-                const card = Object.values(visible)
-                  .flat()
-                  .find((item) => item.key === value);
-                if (!card) return null;
-                return <IssueCard card={card} isOverlay />;
-              }}
-            </KanbanOverlay>
-          </Kanban>
-        </main>
-        {openUrl ? (
-          <aside className="bg-background flex w-[min(42rem,46vw)] shrink-0 flex-col border-l">
-            <div className="flex items-center gap-2 border-b px-3 py-2">
-              <a
-                className="min-w-0 flex-1 truncate text-sm font-medium underline-offset-4 hover:underline"
-                href={openUrl}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {openKey ?? openUrl}
-              </a>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label="Close issue"
-                onClick={() => {
-                  setOpenKey(null);
-                  setOpenUrl(null);
-                }}
-              >
-                <XIcon />
-              </Button>
-            </div>
-            {embed ? (
-              <iframe
-                title={openKey ?? "Issue"}
-                src={embed}
-                className="min-h-0 w-full flex-1 border-0 bg-background"
-              />
-            ) : (
-              <div className="text-muted-foreground flex flex-1 flex-col items-start gap-3 p-6 text-sm">
-                <p>Jira refuses to embed this page.</p>
-                <a
-                  className="text-foreground font-medium underline-offset-4 hover:underline"
-                  href={openUrl}
-                  target="_blank"
-                  rel="noreferrer"
+              {epics.map((epic) => (
+                <button
+                  key={epic.key}
+                  type="button"
+                  className={`rounded-md px-3 py-2 text-left ${
+                    selectedEpic === epic.key
+                      ? "bg-accent text-accent-foreground"
+                      : "hover:bg-muted"
+                  }`}
+                  onClick={() => void selectEpic(epic.key)}
                 >
-                  Open {openKey ?? "issue"} in Jira
-                </a>
-              </div>
-            )}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium tabular-nums">
+                      {epic.key}
+                    </span>
+                    <Badge variant="outline">{childCount(epic.key)}</Badge>
+                  </div>
+                  <span className="mt-1 line-clamp-2 text-sm">{epic.summary}</span>
+                </button>
+              ))}
+            </nav>
           </aside>
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel
+          id="board"
+          defaultSize={openUrl ? "50%" : "80%"}
+          minSize="24rem"
+          className="min-h-0"
+        >
+          <main className="h-full min-h-0 min-w-0 overflow-auto p-6">
+            <Kanban
+              className="h-full min-h-0"
+              value={visible}
+              onValueChange={(next) =>
+                setColumns((previous) => mergeValue(next, previous, selectedEpic))
+              }
+              getItemValue={(card) => card.key}
+              restoreOnCancel
+              onValueCommit={commit}
+            >
+              <KanbanBoard className="grid h-full min-h-0 grid-cols-1 sm:grid-cols-1 auto-rows-fr">
+                <ResizablePanelGroup
+                  id="columns"
+                  orientation="horizontal"
+                  className="min-h-0"
+                >
+                  {Object.entries(visible).map(([title, cards], index, all) => (
+                    <Fragment key={title}>
+                      {index > 0 ? <ResizableHandle withHandle /> : null}
+                      <ResizablePanel
+                        id={title}
+                        defaultSize={`${100 / Math.max(all.length, 1)}%`}
+                        minSize="16rem"
+                        className="min-h-0 min-w-0"
+                      >
+                        <StatusColumn
+                          title={title}
+                          cards={cards}
+                          disabled={busy}
+                          onOpen={(key) => void open(key)}
+                        />
+                      </ResizablePanel>
+                    </Fragment>
+                  ))}
+                </ResizablePanelGroup>
+              </KanbanBoard>
+              <KanbanOverlay>
+                {({ value, variant }) => {
+                  if (variant === "column") {
+                    return (
+                      <StatusColumn
+                        title={String(value)}
+                        cards={visible[String(value)] ?? []}
+                        isOverlay
+                      />
+                    );
+                  }
+                  const card = Object.values(visible)
+                    .flat()
+                    .find((item) => item.key === value);
+                  if (!card) return null;
+                  return <IssueCard card={card} isOverlay />;
+                }}
+              </KanbanOverlay>
+            </Kanban>
+          </main>
+        </ResizablePanel>
+        {openUrl ? (
+          <>
+            <ResizableHandle withHandle />
+            <ResizablePanel
+              id="open"
+              defaultSize="30%"
+              minSize="16rem"
+              className="min-h-0"
+            >
+              <aside className="bg-background flex h-full min-h-0 flex-col border-l">
+                <div className="flex items-center gap-2 border-b px-3 py-2">
+                  <a
+                    className="min-w-0 flex-1 truncate text-sm font-medium underline-offset-4 hover:underline"
+                    href={openUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {openKey ?? openUrl}
+                  </a>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="Close issue"
+                    onClick={() => {
+                      setOpenKey(null);
+                      setOpenUrl(null);
+                    }}
+                  >
+                    <XIcon />
+                  </Button>
+                </div>
+                {embed ? (
+                  <iframe
+                    title={openKey ?? "Issue"}
+                    src={embed}
+                    className="min-h-0 w-full flex-1 border-0 bg-background"
+                  />
+                ) : (
+                  <div className="text-muted-foreground flex flex-1 flex-col items-start gap-3 p-6 text-sm">
+                    <p>Jira refuses to embed this page.</p>
+                    <a
+                      className="text-foreground font-medium underline-offset-4 hover:underline"
+                      href={openUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open {openKey ?? "issue"} in Jira
+                    </a>
+                  </div>
+                )}
+              </aside>
+            </ResizablePanel>
+          </>
         ) : null}
-      </div>
+      </ResizablePanelGroup>
     </div>
   );
 }

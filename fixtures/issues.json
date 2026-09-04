@@ -36,7 +36,9 @@
     "fields": {
       "summary": "Parse jira-cli --raw JSON",
       "description": "Turn the payload into Columns.",
-      "labels": [],
+      "labels": [
+        "parser"
+      ],
       "issueType": {
         "name": "Story"
       },
@@ -69,7 +71,10 @@
     "fields": {
       "summary": "Drag a Card to Move",
       "description": "Drop on another Column runs jira issue move.",
-      "labels": [],
+      "labels": [
+        "kanban",
+        "write-back"
+      ],
       "issueType": {
         "name": "Story"
       },
@@ -102,7 +107,9 @@
     "fields": {
       "summary": "Show stderr when a Move is illegal",
       "description": "To Do cannot jump to Done.",
-      "labels": [],
+      "labels": [
+        "error"
+      ],
       "issueType": {
         "name": "Bug"
       },
@@ -171,7 +178,9 @@
     "fields": {
       "summary": "Someone else's work",
       "description": "Not assigned to me; default Scope hides this.",
-      "labels": [],
+      "labels": [
+        "other"
+      ],
       "issueType": {
         "name": "Story"
       },

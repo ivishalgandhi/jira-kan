@@ -14,6 +14,7 @@ export type Card = {
   dueDate?: string;
   type?: string;
   epic?: string;
+  labels?: string[];
 };
 
 export type Column = {
@@ -38,6 +39,7 @@ export type RawIssue = {
     issuetype?: { name?: unknown };
     issueType?: { name?: unknown };
     parent?: { key?: unknown };
+    labels?: unknown;
   };
 };
 
@@ -62,6 +64,15 @@ function issueType(fields: RawIssue["fields"]): string | undefined {
 
 function epicKey(fields: RawIssue["fields"]): string | undefined {
   return typeof fields?.parent?.key === "string" ? fields.parent.key : undefined;
+}
+
+function issueLabels(fields: RawIssue["fields"]): string[] | undefined {
+  const raw = fields?.labels;
+  if (!Array.isArray(raw)) return undefined;
+  const labels = raw.filter(
+    (item): item is string => typeof item === "string" && item.length > 0,
+  );
+  return labels.length > 0 ? labels : undefined;
 }
 
 function toEpic(face: {
@@ -94,6 +105,7 @@ function toCard(issue: RawIssue, key: string): Card {
   const dueDate = formatDueDate(issue.fields?.duedate);
   const type = issueType(issue.fields);
   const epic = epicKey(issue.fields);
+  const labels = issueLabels(issue.fields);
   return {
     key,
     summary,
@@ -102,6 +114,7 @@ function toCard(issue: RawIssue, key: string): Card {
     ...(dueDate ? { dueDate } : {}),
     ...(type ? { type } : {}),
     ...(epic ? { epic } : {}),
+    ...(labels ? { labels } : {}),
   };
 }
 
