@@ -6,6 +6,7 @@ import { afterEach, expect, test } from "vitest";
 
 import { createApp } from "./app.ts";
 import { handleAppApi } from "./app-api.ts";
+import type { RawIssue } from "./board.ts";
 import { IssueStore } from "./store.ts";
 
 const fixture = JSON.parse(
@@ -13,7 +14,7 @@ const fixture = JSON.parse(
     join(dirname(fileURLToPath(import.meta.url)), "../fixtures/issues.json"),
     "utf8",
   ),
-);
+) as RawIssue[];
 
 const servers: { close(): void }[] = [];
 

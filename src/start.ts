@@ -47,7 +47,7 @@ async function main() {
 
   if (kind === "jira") {
     try {
-      await refreshFromJira(app, kind);
+      await refreshFromJira(app, kind, { piped: Boolean(piped) });
     } catch (err) {
       console.error("jira Refresh failed; keeping Fixture Board");
       console.error(err);

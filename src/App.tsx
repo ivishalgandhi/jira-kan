@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { GripVerticalIcon, MoonIcon, SunIcon, XIcon } from "lucide-react";
 
-import type { Board, Card, Column } from "./board.ts";
+import type { Board, Card, Column, Epic } from "./board.ts";
 import { filterValue, mergeValue, rollbackColumns } from "./visible.ts";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
 import { Badge } from "~/components/ui/badge";
@@ -176,7 +176,7 @@ function StatusColumn({
 
 export function App() {
   const [columns, setColumns] = useState<Record<string, Card[]>>({});
-  const [epics, setEpics] = useState<Card[]>([]);
+  const [epics, setEpics] = useState<Epic[]>([]);
   const [selectedEpic, setSelectedEpic] = useState<string | null>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [openUrl, setOpenUrl] = useState<string | null>(null);
@@ -271,7 +271,7 @@ export function App() {
   function childCount(key: string) {
     return Object.values(columns)
       .flat()
-      .filter((card) => card.parent === key).length;
+      .filter((card) => card.epic === key).length;
   }
 
   return (
@@ -420,3 +420,4 @@ export function App() {
     </div>
   );
 }
+

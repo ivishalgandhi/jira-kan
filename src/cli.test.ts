@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 
+import type { RawIssue } from "./board.ts";
 import { createBoardApp, refreshFromJira } from "./boot.ts";
 import { createJiraCli, resolveJiraBin } from "./cli.ts";
 
@@ -12,7 +13,7 @@ const fixture = JSON.parse(
     join(dirname(fileURLToPath(import.meta.url)), "../fixtures/issues.json"),
     "utf8",
   ),
-);
+) as RawIssue[];
 
 function fakeJira() {
   const dir = mkdtempSync(join(tmpdir(), "jira-kan-"));
@@ -166,4 +167,31 @@ test("boot with jira first-paints from the store then Refresh shells jira", asyn
       column.cards.map((card) => ({ key: card.key, summary: card.summary })),
     ),
   ).toEqual([{ key: "DEMO-1", summary: "from jira" }]);
+});
+
+test("boot with Pipe and jira keeps the Pipe Board until Refresh", async () => {
+  const { bin, calls } = fakeJira();
+  const piped = [
+    {
+      key: "WORK-9",
+      fields: { summary: "piped", status: { name: "To Do" } },
+    },
+  ];
+  const { kind, app } = await createBoardApp({
+    raw: piped,
+    piped: true,
+    env: { PATH: "/tmp", JIRA_BIN: bin },
+  });
+  expect(kind).toBe("jira");
+  expect(app.board().columns[0]?.cards.map((card) => card.key)).toEqual(["WORK-9"]);
+
+  await refreshFromJira(app, kind, { piped: true });
+  expect(app.board().columns[0]?.cards.map((card) => card.key)).toEqual(["WORK-9"]);
+  expect(calls().filter((call) => call.args[1] === "list")).toEqual([]);
+
+  await refreshFromJira(app, kind);
+  expect(app.board().columns[0]?.cards[0]).toMatchObject({
+    key: "DEMO-1",
+    summary: "from jira",
+  });
 });

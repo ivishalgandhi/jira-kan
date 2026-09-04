@@ -1,3 +1,11 @@
+export type Epic = {
+  key: string;
+  summary: string;
+  priority?: string;
+  assignee?: string;
+  dueDate?: string;
+};
+
 export type Card = {
   key: string;
   summary: string;
@@ -5,7 +13,7 @@ export type Card = {
   assignee?: string;
   dueDate?: string;
   type?: string;
-  parent?: string;
+  epic?: string;
 };
 
 export type Column = {
@@ -16,7 +24,7 @@ export type Column = {
 
 export type Board = {
   columns: Column[];
-  epics: Card[];
+  epics: Epic[];
 };
 
 export type RawIssue = {
@@ -52,8 +60,24 @@ function issueType(fields: RawIssue["fields"]): string | undefined {
   return typeof name === "string" ? name : undefined;
 }
 
-function parentKey(fields: RawIssue["fields"]): string | undefined {
+function epicKey(fields: RawIssue["fields"]): string | undefined {
   return typeof fields?.parent?.key === "string" ? fields.parent.key : undefined;
+}
+
+function toEpic(face: {
+  key: string;
+  summary: string;
+  priority?: string;
+  assignee?: string;
+  dueDate?: string;
+}): Epic {
+  return {
+    key: face.key,
+    summary: face.summary,
+    ...(face.priority ? { priority: face.priority } : {}),
+    ...(face.assignee ? { assignee: face.assignee } : {}),
+    ...(face.dueDate ? { dueDate: face.dueDate } : {}),
+  };
 }
 
 function toCard(issue: RawIssue, key: string): Card {
@@ -69,7 +93,7 @@ function toCard(issue: RawIssue, key: string): Card {
       : undefined;
   const dueDate = formatDueDate(issue.fields?.duedate);
   const type = issueType(issue.fields);
-  const parent = parentKey(issue.fields);
+  const epic = epicKey(issue.fields);
   return {
     key,
     summary,
@@ -77,7 +101,7 @@ function toCard(issue: RawIssue, key: string): Card {
     ...(assignee ? { assignee } : {}),
     ...(dueDate ? { dueDate } : {}),
     ...(type ? { type } : {}),
-    ...(parent ? { parent } : {}),
+    ...(epic ? { epic } : {}),
   };
 }
 
@@ -88,18 +112,18 @@ export function issuesToBoard(raw: unknown): Board {
 
   const columns: Column[] = [];
   const byStatus = new Map<string, Column>();
-  const epics: Card[] = [];
-  const epicByKey = new Map<string, Card>();
+  const epics: Epic[] = [];
+  const epicByKey = new Map<string, Epic>();
 
-  function rememberEpic(card: Card) {
-    const existing = epicByKey.get(card.key);
+  function rememberEpic(epic: Epic) {
+    const existing = epicByKey.get(epic.key);
     if (!existing) {
-      epicByKey.set(card.key, card);
-      epics.push(card);
+      epicByKey.set(epic.key, epic);
+      epics.push(epic);
       return;
     }
-    if (!existing.summary && card.summary) {
-      Object.assign(existing, card);
+    if (!existing.summary && epic.summary) {
+      Object.assign(existing, epic);
     }
   }
 
@@ -113,12 +137,12 @@ export function issuesToBoard(raw: unknown): Board {
 
     const card = toCard(issue, key);
     if ((card.type ?? "").toLowerCase() === "epic") {
-      rememberEpic(card);
+      rememberEpic(toEpic(card));
       continue;
     }
 
-    if (card.parent) {
-      rememberEpic({ key: card.parent, summary: card.parent });
+    if (card.epic) {
+      rememberEpic({ key: card.epic, summary: card.epic });
     }
 
     let column = byStatus.get(status);

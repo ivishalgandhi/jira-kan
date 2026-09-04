@@ -3,8 +3,8 @@ import { expect, test } from "vitest";
 import type { Card } from "./board.ts";
 import { mergeValue, rollbackColumns } from "./visible.ts";
 
-const child: Card = { key: "DEMO-2", summary: "child", parent: "DEMO-1" };
-const other: Card = { key: "DEMO-9", summary: "other", parent: "DEMO-8" };
+const child: Card = { key: "DEMO-2", summary: "child", epic: "DEMO-1" };
+const other: Card = { key: "DEMO-9", summary: "other", epic: "DEMO-8" };
 
 test("rollback under an Epic keeps hidden Cards", () => {
   const current = {

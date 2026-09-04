@@ -38,7 +38,11 @@ export async function createBoardApp(opts: {
   return { app, store, kind: bin ? "jira" : "store" };
 }
 
-export async function refreshFromJira(app: App, kind: Boot["kind"]) {
-  if (kind !== "jira") return;
+export async function refreshFromJira(
+  app: App,
+  kind: Boot["kind"],
+  opts: { piped?: boolean } = {},
+) {
+  if (kind !== "jira" || opts.piped) return;
   await app.refresh();
 }

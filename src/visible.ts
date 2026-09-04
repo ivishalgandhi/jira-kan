@@ -1,5 +1,9 @@
 import type { Card } from "./board.ts";
 
+function ofEpic(card: Card, epic: string) {
+  return card.epic === epic;
+}
+
 export function filterValue(
   columns: Record<string, Card[]>,
   epic: string | null,
@@ -8,7 +12,7 @@ export function filterValue(
   return Object.fromEntries(
     Object.entries(columns).map(([title, cards]) => [
       title,
-      cards.filter((card) => card.parent === epic),
+      cards.filter((card) => ofEpic(card, epic)),
     ]),
   );
 }
@@ -22,7 +26,7 @@ export function mergeValue(
   const hidden = Object.fromEntries(
     Object.entries(previous).map(([title, cards]) => [
       title,
-      cards.filter((card) => card.parent !== epic),
+      cards.filter((card) => !ofEpic(card, epic)),
     ]),
   );
   const titles = new Set([...Object.keys(hidden), ...Object.keys(next)]);
