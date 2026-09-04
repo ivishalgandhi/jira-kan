@@ -3,13 +3,14 @@ import {
   ChevronDownIcon,
   GripVerticalIcon,
   MoonIcon,
+  SearchIcon,
   SunIcon,
   XIcon,
 } from "lucide-react";
 
-import type { Board, Card, Column, Epic } from "./board.ts";
+import { cardAge, type Board, type Card, type Column, type Epic } from "./board.ts";
 import { frameSrc } from "./open.ts";
-import { filterValue, mergeValue, rollbackColumns, stampEpic } from "./visible.ts";
+import { cardMatches, filterEpics, filterValue, mergeValue, rollbackColumns, stampEpic } from "./visible.ts";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -35,6 +36,11 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "~/components/ui/resizable";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "~/components/ui/input-group";
 import { cn } from "~/lib/utils";
 import { useDefaultLayout } from "react-resizable-panels";
 
@@ -102,6 +108,7 @@ function IssueCard({
   disabled?: boolean;
   onOpen?: () => void;
 }) {
+  const age = cardAge(card.created);
   const body = (
     <UiCard className="gap-3 py-3 shadow-sm">
       <CardContent className="space-y-3">
@@ -109,14 +116,21 @@ function IssueCard({
           <span className="text-muted-foreground text-xs font-medium tabular-nums">
             {card.key}
           </span>
-          {card.priority ? (
-            <Badge
-              variant={priorityVariant(card.priority)}
-              className="pointer-events-none h-5 shrink-0 rounded-full px-2 text-xs capitalize"
-            >
-              {card.priority}
-            </Badge>
-          ) : null}
+          <div className="flex shrink-0 items-center gap-2">
+            {card.priority ? (
+              <Badge
+                variant={priorityVariant(card.priority)}
+                className="pointer-events-none h-5 rounded-full px-2 text-xs capitalize"
+              >
+                {card.priority}
+              </Badge>
+            ) : null}
+            {age ? (
+              <span className="text-muted-foreground text-xs font-medium tabular-nums">
+                {age}
+              </span>
+            ) : null}
+          </div>
         </div>
         <p className="text-sm leading-5 font-medium text-pretty">{card.summary}</p>
         {card.labels?.length ? (
@@ -255,13 +269,18 @@ export function App() {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [openUrl, setOpenUrl] = useState<string | null>(null);
   const [flags, setFlags] = useState("");
+  const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [theme, setTheme] = useState<Theme>(readTheme);
 
   const visible = useMemo(
-    () => filterValue(columns, selectedEpic),
-    [columns, selectedEpic],
+    () => filterValue(columns, selectedEpic, search),
+    [columns, selectedEpic, search],
+  );
+  const visibleEpics = useMemo(
+    () => filterEpics(epics, Object.values(columns).flat(), search),
+    [epics, columns, search],
   );
   const columnIds = Object.keys(visible);
   const shellIds = openUrl ? ["epics", "board", "open"] : ["epics", "board"];
@@ -345,7 +364,7 @@ export function App() {
 
   function commit(_next: Record<string, Card[]>, meta: KanbanCommitMeta<Card>) {
     if (meta.kind === "column" || meta.activeContainer === meta.overContainer) {
-      setColumns((current) => rollbackColumns(meta.previousValue, current, selectedEpic));
+      setColumns((current) => rollbackColumns(meta.previousValue, current, selectedEpic, search));
       return;
     }
     void move(String(meta.event.active.id), meta.overContainer);
@@ -360,7 +379,7 @@ export function App() {
   function childCount(key: string) {
     return Object.values(columns)
       .flat()
-      .filter((card) => card.epic === key).length;
+      .filter((card) => card.epic === key && cardMatches(card, search)).length;
   }
 
   async function selectEpic(key: string | null) {
@@ -386,8 +405,30 @@ export function App() {
     <div className="bg-muted/40 flex h-screen flex-col">
       <header className="bg-background flex flex-wrap items-center gap-2 border-b px-6 py-3">
         <strong className="mr-2 text-sm">jira-kan</strong>
+        <InputGroup className="min-w-48 flex-1">
+          <InputGroupInput
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search Epics and Cards"
+            aria-label="Search"
+          />
+          <InputGroupAddon>
+            <SearchIcon />
+          </InputGroupAddon>
+          {search ? (
+            <InputGroupAddon align="inline-end">
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => setSearch("")}
+              >
+                <XIcon className="size-4" />
+              </button>
+            </InputGroupAddon>
+          ) : null}
+        </InputGroup>
         <input
-          className="border-input bg-background h-9 min-w-64 flex-1 rounded-md border px-3 text-sm shadow-xs"
+          className="border-input bg-background h-9 min-w-48 flex-1 rounded-md border px-3 text-sm shadow-xs"
           value={flags}
           onChange={(event) => setFlags(event.target.value)}
           spellCheck={false}
@@ -441,7 +482,7 @@ export function App() {
               >
                 All stories
               </button>
-              {epics.map((epic) => (
+              {visibleEpics.map((epic) => (
                 <button
                   key={epic.key}
                   type="button"
@@ -476,7 +517,7 @@ export function App() {
               className="h-full min-h-0"
               value={visible}
               onValueChange={(next) =>
-                setColumns((previous) => mergeValue(next, previous, selectedEpic))
+                setColumns((previous) => mergeValue(next, previous, selectedEpic, search))
               }
               getItemValue={(card) => card.key}
               restoreOnCancel

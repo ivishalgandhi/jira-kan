@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 
-import type { Card } from "./board.ts";
-import { mergeValue, rollbackColumns, stampEpic } from "./visible.ts";
+import type { Card, Epic } from "./board.ts";
+import { filterEpics, filterValue, mergeValue, rollbackColumns, stampEpic } from "./visible.ts";
 
 const child: Card = { key: "DEMO-2", summary: "child", epic: "DEMO-1" };
 const other: Card = { key: "DEMO-9", summary: "other", epic: "DEMO-8" };
@@ -67,4 +67,60 @@ test("stamp Epic adds a child that was missing from Scope", () => {
       { key: "SQLJIRA-9", summary: "New", epic: "SQLJIRA-1" },
     ],
   });
+});
+
+const labeled: Card = {
+  key: "DEMO-3",
+  summary: "Drag a Card to Move",
+  epic: "DEMO-1",
+  labels: ["kanban"],
+};
+const epic: Epic = { key: "DEMO-1", summary: "Ship a local kanban" };
+const otherEpic: Epic = { key: "DEMO-9", summary: "Other" };
+
+test("Search hides Cards that do not match", () => {
+  expect(
+    filterValue(
+      { "To Do": [child], "In Progress": [labeled] },
+      null,
+      "kanban",
+    ),
+  ).toEqual({ "In Progress": [labeled] });
+});
+
+test("Search under an Epic keeps only matching children", () => {
+  expect(
+    filterValue(
+      { "To Do": [child, other], "In Progress": [labeled] },
+      "DEMO-1",
+      "drag",
+    ),
+  ).toEqual({ "In Progress": [labeled] });
+});
+
+test("merge under Search keeps hidden Cards", () => {
+  expect(
+    mergeValue(
+      { "In Progress": [labeled] },
+      { "To Do": [child], "In Progress": [labeled] },
+      null,
+      "kanban",
+    ),
+  ).toEqual({
+    "To Do": [child],
+    "In Progress": [labeled],
+  });
+});
+
+test("Search keeps an Epic that matches or has a matching Card", () => {
+  expect(filterEpics([epic, otherEpic], [child, labeled], "kanban")).toEqual([
+    epic,
+  ]);
+  expect(filterEpics([epic, otherEpic], [child, labeled], "other")).toEqual([
+    otherEpic,
+  ]);
+  expect(filterEpics([epic, otherEpic], [child, labeled], "")).toEqual([
+    epic,
+    otherEpic,
+  ]);
 });

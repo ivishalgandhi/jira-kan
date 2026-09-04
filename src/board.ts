@@ -15,6 +15,7 @@ export type Card = {
   type?: string;
   epic?: string;
   labels?: string[];
+  created?: string;
 };
 
 export type Column = {
@@ -41,6 +42,7 @@ export type RawIssue = {
     parent?: { key?: unknown };
     labels?: unknown;
     components?: unknown;
+    created?: unknown;
   };
 };
 
@@ -56,6 +58,30 @@ function formatDueDate(value: unknown): string | undefined {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function createdAt(fields: RawIssue["fields"]): string | undefined {
+  return typeof fields?.created === "string" && fields.created
+    ? fields.created
+    : undefined;
+}
+
+export function cardAge(created: unknown, now = Date.now()): string | undefined {
+  if (typeof created !== "string" || !created) return undefined;
+  const day = /^(\d{4})-(\d{2})-(\d{2})/.exec(created);
+  const start = day
+    ? Date.UTC(Number(day[1]), Number(day[2]) - 1, Number(day[3]))
+    : Date.parse(created);
+  if (Number.isNaN(start)) return undefined;
+  const end = new Date(now);
+  const today = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+  const origin = day ? start : Date.UTC(
+    new Date(start).getUTCFullYear(),
+    new Date(start).getUTCMonth(),
+    new Date(start).getUTCDate(),
+  );
+  const days = Math.max(0, Math.round((today - origin) / 86_400_000));
+  return `${days}d`;
 }
 
 function issueType(fields: RawIssue["fields"]): string | undefined {
@@ -116,6 +142,7 @@ function toCard(issue: RawIssue, key: string): Card {
   const type = issueType(issue.fields);
   const epic = epicKey(issue.fields);
   const labels = issueLabels(issue.fields);
+  const created = createdAt(issue.fields);
   return {
     key,
     summary,
@@ -125,6 +152,7 @@ function toCard(issue: RawIssue, key: string): Card {
     ...(type ? { type } : {}),
     ...(epic ? { epic } : {}),
     ...(labels ? { labels } : {}),
+    ...(created ? { created } : {}),
   };
 }
 

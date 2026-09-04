@@ -9,7 +9,7 @@ A Jira work item identified by its key.
 _Avoid_: ticket, item, task (when meaning the Jira record)
 
 **Card**:
-The Board representation of one Issue. It shows the Issue key and summary, and when the payload has them, priority, assignee, due date, and labels.
+The Board representation of one Issue. It shows the Issue key and summary, and when the payload has them, priority, assignee, due date, labels, and age since created.
 _Avoid_: tile, chip
 
 **Column**:
@@ -31,6 +31,10 @@ _Avoid_: parent (jira-cli's `-P` flag name)
 **Scope**:
 The jira-cli list invocation that fills the Board. The default Scope is the current jira-cli Project.
 _Avoid_: filter, view, query (when meaning this)
+
+**Search**:
+Typing in the header that hides Epics and Cards that do not match. It does not change Scope or Refresh Jira.
+_Avoid_: filter, query (when meaning this)
 
 **Pipe**:
 stdin carrying `jira issue list --raw` JSON into the app.

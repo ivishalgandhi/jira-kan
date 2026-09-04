@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, expectTypeOf, test } from "vitest";
 
-import { issuesToBoard, mergeEpics, type Board, type Card, type Epic, type RawIssue } from "./board.ts";
+import { cardAge, issuesToBoard, mergeEpics, type Board, type Card, type Epic, type RawIssue } from "./board.ts";
 
 const fixture = JSON.parse(
   readFileSync(
@@ -53,6 +53,7 @@ test("Epics leave the Board and children keep the Epic key", () => {
     priority: "High",
     assignee: "Person A",
     dueDate: "Aug 25, 2026",
+    created: "2026-09-01T11:00:00.000+0000",
     labels: ["kanban", "write-back"],
   });
 });
@@ -87,6 +88,28 @@ test("Cards keep labels from the payload", () => {
   expect(board.columns[0].cards[0].labels).toEqual(["kanban", "scope"]);
   expect(board.columns[0].cards[1].labels).toBeUndefined();
   expect(board.columns[0].cards[2].labels).toEqual(["parser", "cli"]);
+});
+
+test("Card age is days since created", () => {
+  const now = Date.parse("2026-09-04T12:00:00.000Z");
+  expect(cardAge("2026-07-20T09:00:00.000+0000", now)).toBe("46d");
+  expect(cardAge("2026-07-11T00:00:00.000Z", now)).toBe("55d");
+  expect(cardAge(undefined, now)).toBeUndefined();
+  expect(cardAge("not-a-date", now)).toBeUndefined();
+});
+
+test("Cards keep created from the payload", () => {
+  const board = issuesToBoard([
+    {
+      key: "DEMO-2",
+      fields: {
+        summary: "Aged",
+        status: { name: "To Do" },
+        created: "2026-07-20T09:00:00.000+0000",
+      },
+    },
+  ]);
+  expect(board.columns[0].cards[0].created).toBe("2026-07-20T09:00:00.000+0000");
 });
 
 test("parent-only payload still names the Epic", () => {

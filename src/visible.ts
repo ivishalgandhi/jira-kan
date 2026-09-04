@@ -1,19 +1,65 @@
-import type { Card } from "./board.ts";
+import type { Card, Epic } from "./board.ts";
 
 function ofEpic(card: Card, epic: string) {
   return card.epic === epic;
 }
 
+function needle(query: string) {
+  return query.trim().toLowerCase();
+}
+
+function haystack(card: Card) {
+  return [
+    card.key,
+    card.summary,
+    card.assignee,
+    card.priority,
+    card.epic,
+    ...(card.labels ?? []),
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join("\n")
+    .toLowerCase();
+}
+
+export function cardMatches(card: Card, query: string) {
+  const q = needle(query);
+  return !q || haystack(card).includes(q);
+}
+
+export function epicMatches(epic: Epic, query: string) {
+  const q = needle(query);
+  return !q || `${epic.key}\n${epic.summary}`.toLowerCase().includes(q);
+}
+
+function hidden(card: Card, epic: string | null, query: string) {
+  if (epic && !ofEpic(card, epic)) return true;
+  return !cardMatches(card, query);
+}
+
 export function filterValue(
   columns: Record<string, Card[]>,
   epic: string | null,
+  query = "",
 ): Record<string, Card[]> {
-  if (!epic) return columns;
-  return Object.fromEntries(
+  const next = Object.fromEntries(
     Object.entries(columns).map(([title, cards]) => [
       title,
-      cards.filter((card) => ofEpic(card, epic)),
+      cards.filter((card) => !hidden(card, epic, query)),
     ]),
+  );
+  if (!needle(query)) return next;
+  return Object.fromEntries(
+    Object.entries(next).filter(([, cards]) => cards.length > 0),
+  );
+}
+
+export function filterEpics(epics: Epic[], cards: Card[], query: string) {
+  if (!needle(query)) return epics;
+  return epics.filter(
+    (epic) =>
+      epicMatches(epic, query) ||
+      cards.some((card) => card.epic === epic.key && cardMatches(card, query)),
   );
 }
 
@@ -21,19 +67,20 @@ export function mergeValue(
   next: Record<string, Card[]>,
   previous: Record<string, Card[]>,
   epic: string | null,
+  query = "",
 ): Record<string, Card[]> {
-  if (!epic) return next;
-  const hidden = Object.fromEntries(
+  if (!epic && !needle(query)) return next;
+  const hiddenCards = Object.fromEntries(
     Object.entries(previous).map(([title, cards]) => [
       title,
-      cards.filter((card) => !ofEpic(card, epic)),
+      cards.filter((card) => hidden(card, epic, query)),
     ]),
   );
-  const titles = new Set([...Object.keys(hidden), ...Object.keys(next)]);
+  const titles = new Set([...Object.keys(hiddenCards), ...Object.keys(next)]);
   return Object.fromEntries(
     [...titles].map((title) => [
       title,
-      [...(hidden[title] ?? []), ...(next[title] ?? [])],
+      [...(hiddenCards[title] ?? []), ...(next[title] ?? [])],
     ]),
   );
 }
@@ -42,8 +89,9 @@ export function rollbackColumns(
   previousValue: Record<string, Card[]>,
   current: Record<string, Card[]>,
   epic: string | null,
+  query = "",
 ) {
-  return mergeValue(previousValue, current, epic);
+  return mergeValue(previousValue, current, epic, query);
 }
 
 export function stampEpic(
