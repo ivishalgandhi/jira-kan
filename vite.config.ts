@@ -10,6 +10,10 @@ export default defineConfig({
       "~": path.resolve(import.meta.dirname, "src"),
     },
   },
+  build: {
+    outDir: "dist/ui",
+    emptyOutDir: true,
+  },
   server: {
     host: "127.0.0.1",
     allowedHosts: true,

@@ -5,18 +5,23 @@ Local Kanban for [jira-cli](https://github.com/ankitpokhrel/jira-cli). The first
 ## Run
 
 ```sh
-bun install
-bun run dev
+bunx jira-kan
+# or
+npx jira-kan
 ```
 
-Opens `http://127.0.0.1:5173`. First paint is the Fixture. If `jira` is on PATH, the process then Refresh-es from your existing `jira init`. If not, Refresh and Move use the in-process store.
+Opens `http://127.0.0.1:5173`. No clone, no `bun install`. `bunx` / `npx` installs the published package into a cache and runs it.
+
+First paint is the Fixture. If `jira` is on PATH, the process then Refresh-es from your existing `jira init`. If not, Refresh and Move use the in-process store.
+
+Until npm has a release, from a clone: `bun run build && bun dist/jira-kan.js`.
 
 - Left: Epics. Center: Cards (one Column per status in the payload). Right: Open URL; remote Jira is a link, not an iframe.
 - Drop a Card on a Column to Move (`jira issue move`).
 - Same-Column drop and column reorder do nothing.
 - Theme is stored in `localStorage`.
 
-LAN: `HOST=0.0.0.0 bun run dev`.
+LAN: `HOST=0.0.0.0 bunx jira-kan`.
 
 ## Work Jira
 
@@ -24,7 +29,7 @@ Use your existing `jira init` config. Do not set `JIRA_CONFIG_FILE` to the Fixtu
 
 ```sh
 export JIRA_API_TOKEN=...   # only if jira-cli does not already have it
-bun run dev
+bunx jira-kan
 ```
 
 Scope flags start empty. Add `-a you@work.com` or `-s~Done` if you want a tighter list, then Refresh.
@@ -32,15 +37,15 @@ Scope flags start empty. Add `-a you@work.com` or `-s~Done` if you want a tighte
 ## Fake Jira
 
 ```sh
-JIRA_CONFIG_FILE=./fixtures/jira.config.yml JIRA_API_TOKEN=fake bun run dev
+JIRA_CONFIG_FILE=/tmp/jira-kan/jira.config.yml JIRA_API_TOKEN=fake bunx jira-kan
 ```
 
-`fixtures/jira.config.yml` is written on boot and points at this origin.
+Boot writes that Fake Jira config (path is also printed) and points it at this origin.
 
 ## Pipe
 
 ```sh
-jira issue list --raw | bun run dev
+jira issue list --raw | bunx jira-kan
 ```
 
 Pipe is the first Board. Refresh and Move still go through `jira` when it is on PATH.
@@ -66,7 +71,10 @@ Pipe is the first Board. Refresh and Move still go through `jira` when it is on 
 ```sh
 bun test
 bun run typecheck
+bun run build
 ```
+
+Contributors still `bun install` and `bun run dev` (Vite). `bun run build` writes the published CLI to `dist/jira-kan.js`.
 
 ## Version
 
@@ -79,6 +87,6 @@ Pushes to `main` run tests, then [semantic-release](https://semantic-release.git
 | `feat!:` or `BREAKING CHANGE:` | major |
 | `docs:`, `chore:`, `test:` | none |
 
-It writes `package.json`, tags `vX.Y.Z`, and opens a GitHub Release. The package is private; nothing is published to npm.
+It writes `package.json`, tags `vX.Y.Z`, and opens a GitHub Release. npm publish is wired (`bin`, `files`, `bun run build` on CI) and waits on repo secret `NPM_TOKEN`. After that secret exists, set `npmPublish` to `true` in `.releaserc.json`.
 
 First Board is tagged `v0.1.0`. Later `fix:` / `feat:` commits on `main` bump from there. Without a `v*` tag the first release is `1.0.0`.

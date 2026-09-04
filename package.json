@@ -2,11 +2,26 @@
   "name": "jira-kan",
   "version": "0.6.0",
   "description": "Local Kanban for jira-cli",
-  "private": true,
+  "license": "MIT",
   "type": "module",
+  "bin": {
+    "jira-kan": "dist/jira-kan.js"
+  },
+  "files": [
+    "dist",
+    "fixtures/issues.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ivishalgandhi/jira-kan.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "bun src/start.ts",
-    "build": "vite build",
+    "start": "bun src/bin.ts",
+    "build": "vite build && bun build src/bin.ts --outfile dist/jira-kan.js --target node --banner '#!/usr/bin/env node'",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
