@@ -3,10 +3,11 @@ import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createApp } from "./app.ts";
+import { createBoardApp, refreshFromJira } from "./boot.ts";
+import { resolveJiraBin } from "./cli.ts";
 import { handleRequest } from "./http.ts";
 import { writeJiraConfig } from "./jira-config.ts";
-import { IssueStore } from "./store.ts";
+import { resolveListen } from "./listen.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const fixturePath = join(root, "fixtures/issues.json");
@@ -22,15 +23,15 @@ async function readPipe(): Promise<unknown | null> {
 async function main() {
   const piped = await readPipe();
   const raw = piped ?? JSON.parse(readFileSync(fixturePath, "utf8"));
-  const store = IssueStore.fromRaw(raw);
-  const app = createApp({ store });
-  if (piped) app.hydrate(piped);
-  else await app.refresh();
+  const { app, store, kind } = await createBoardApp({
+    raw,
+    piped: Boolean(piped),
+  });
 
   const { createServer: createVite } = await import("vite");
   const vite = await createVite({
     root,
-    server: { middlewareMode: true, host: "127.0.0.1" },
+    server: { middlewareMode: true, allowedHosts: true },
     appType: "spa",
   });
 
@@ -39,15 +40,24 @@ async function main() {
     vite.middlewares(req, res);
   });
 
-  const port = Number(process.env.PORT ?? 5173);
-  await new Promise<void>((resolve) =>
-    server.listen(port, "127.0.0.1", resolve),
-  );
+  const { host, port } = resolveListen();
+  await new Promise<void>((resolve) => server.listen(port, host, resolve));
   const origin = `http://127.0.0.1:${port}`;
-  writeJiraConfig(join(root, "fixtures"), origin);
-  console.log(`jira-kan ${origin}`);
+  const fakeConfig = writeJiraConfig(join(root, "fixtures"), origin);
+
+  if (kind === "jira") {
+    try {
+      await refreshFromJira(app, kind);
+    } catch (err) {
+      console.error("jira Refresh failed; keeping Fixture Board");
+      console.error(err);
+    }
+  }
+
+  console.log(`jira-kan http://${host}:${port}`);
+  console.log(`cli ${kind === "jira" ? resolveJiraBin() : "store"}`);
   console.log(`Fake Jira ${origin}/rest/api/2/search`);
-  console.log(`jira-cli config ${join(root, "fixtures/jira.config.yml")}`);
+  console.log(`Fake Jira config ${fakeConfig}`);
 }
 
 main().catch((err) => {

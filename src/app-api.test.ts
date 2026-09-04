@@ -41,14 +41,17 @@ test("default Board is mine and not Done", async () => {
   const { base } = await listen();
   const board = await (await fetch(`${base}/api/board`)).json();
   expect(board.columns.map((c: { title: string }) => c.title)).toEqual([
-    "In Progress",
     "To Do",
+    "In Progress",
   ]);
   expect(
     board.columns.flatMap((c: { cards: { key: string }[] }) =>
       c.cards.map((card) => card.key),
     ),
-  ).toEqual(["DEMO-1", "DEMO-3", "DEMO-2", "DEMO-4"]);
+  ).toEqual(["DEMO-2", "DEMO-4", "DEMO-3"]);
+  expect(board.epics.map((card: { key: string }) => card.key)).toEqual([
+    "DEMO-1",
+  ]);
 });
 
 test("successful Move Refresh-es and drops Done", async () => {
@@ -64,7 +67,7 @@ test("successful Move Refresh-es and drops Done", async () => {
     body.board.columns.flatMap((c: { cards: { key: string }[] }) =>
       c.cards.map((card) => card.key),
     ),
-  ).toEqual(["DEMO-1", "DEMO-2", "DEMO-4"]);
+  ).toEqual(["DEMO-2", "DEMO-4"]);
 });
 
 test("illegal Move snaps back with jira-cli stderr", async () => {

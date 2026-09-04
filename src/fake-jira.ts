@@ -84,9 +84,30 @@ export function handleFakeJira(
     const issue = store.get(key);
     res.statusCode = issue ? 200 : 404;
     res.setHeader("content-type", "text/html; charset=utf-8");
+    const fields = issue?.fields;
+    const type =
+      (fields?.issuetype as { name?: string } | undefined)?.name ??
+      (fields?.issueType as { name?: string } | undefined)?.name ??
+      "Issue";
     res.end(
       issue
-        ? `<html><title>${issue.key}</title><p>${issue.fields.summary}</p></html>`
+        ? `<!doctype html><html><head><meta charset="utf-8"><title>${issue.key}</title>
+<style>
+  :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, sans-serif; }
+  body { margin: 0; padding: 1.25rem; }
+  .key { font-size: 12px; letter-spacing: .02em; opacity: .7; }
+  h1 { font-size: 1.25rem; margin: .35rem 0 1rem; }
+  dl { display: grid; grid-template-columns: 7rem 1fr; gap: .4rem 1rem; font-size: 14px; }
+  dt { opacity: .65; }
+</style></head><body>
+  <div class="key">${issue.key} · ${type}</div>
+  <h1>${issue.fields.summary}</h1>
+  <dl>
+    <dt>Status</dt><dd>${issue.fields.status.name}</dd>
+    <dt>Assignee</dt><dd>${issue.fields.assignee?.displayName ?? "Unassigned"}</dd>
+    <dt>Priority</dt><dd>${(fields?.priority as { name?: string } | undefined)?.name ?? "—"}</dd>
+  </dl>
+</body></html>`
         : "not found",
     );
     return true;

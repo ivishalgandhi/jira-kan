@@ -9,7 +9,7 @@ A Jira work item identified by its key.
 _Avoid_: ticket, item, task (when meaning the Jira record)
 
 **Card**:
-The Board representation of one Issue. It shows the Issue key and summary.
+The Board representation of one Issue. It shows the Issue key and summary, and when the payload has them, priority, assignee, and due date.
 _Avoid_: tile, chip
 
 **Column**:
@@ -25,7 +25,7 @@ A Jira project identified by its key. The Board shows one Project at a time.
 _Avoid_: repo, codebase (those are this tool)
 
 **Epic**:
-An Issue of type Epic. On the Board it is a Card. Its children appear only when the Scope includes them.
+An Issue of type Epic. It lives in the left pane. Its children appear on the Board as Cards when the Scope includes them.
 _Avoid_: parent (jira-cli's `-P` flag name)
 
 **Scope**:
@@ -45,7 +45,7 @@ Changing an Issue's status from the Board by running `jira issue move`. The only
 _Avoid_: transition, drag (the gesture), update
 
 **Open**:
-Opening an Issue in the browser with `jira open KEY`.
+Showing an Issue's Jira URL in the side pane. `jira open KEY` still resolves that URL.
 _Avoid_: view, browse (when meaning this)
 
 **Write-back**:

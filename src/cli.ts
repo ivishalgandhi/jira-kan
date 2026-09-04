@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { delimiter, join, resolve } from "node:path";
 
 import { DEFAULT_FLAGS, flagsToJql } from "./flags.ts";
 import type { IssueStore } from "./store.ts";
@@ -24,23 +26,39 @@ export function createStoreCli(store: IssueStore): Cli {
   };
 }
 
-export function createJiraCli(opts: {
-  bin?: string;
-  configPath: string;
-  token?: string;
-}): Cli {
+export function resolveJiraBin(
+  bin = process.env.JIRA_BIN ?? "jira",
+  pathVar = process.env.PATH ?? "",
+): string | undefined {
+  if (!bin) return undefined;
+  if (bin.includes("/") || bin.includes("\\")) {
+    const abs = resolve(bin);
+    return existsSync(abs) ? abs : undefined;
+  }
+  for (const dir of pathVar.split(delimiter)) {
+    if (!dir) continue;
+    const candidate = join(dir, bin);
+    if (existsSync(candidate)) return candidate;
+  }
+  return undefined;
+}
+
+export function createJiraCli(
+  opts: {
+    bin?: string;
+    configPath?: string;
+    token?: string;
+  } = {},
+): Cli {
   const bin = opts.bin ?? "jira";
 
   function run(args: string[]) {
     return new Promise<{ code: number; stdout: string; stderr: string }>(
-      (resolve, reject) => {
-        const child = spawn(bin, args, {
-          env: {
-            ...process.env,
-            JIRA_CONFIG_FILE: opts.configPath,
-            JIRA_API_TOKEN: opts.token ?? "fake",
-          },
-        });
+      (resolveRun, reject) => {
+        const env = { ...process.env };
+        if (opts.configPath) env.JIRA_CONFIG_FILE = resolve(opts.configPath);
+        if (opts.token) env.JIRA_API_TOKEN = opts.token;
+        const child = spawn(bin, args, { env });
         let stdout = "";
         let stderr = "";
         child.stdout.on("data", (chunk) => {
@@ -51,7 +69,7 @@ export function createJiraCli(opts: {
         });
         child.on("error", reject);
         child.on("close", (code) =>
-          resolve({ code: code ?? 1, stdout, stderr }),
+          resolveRun({ code: code ?? 1, stdout, stderr }),
         );
       },
     );
