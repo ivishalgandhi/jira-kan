@@ -10,7 +10,7 @@ import {
 
 import { cardAge, type Board, type Card, type Column, type Epic } from "./board.ts";
 import { frameSrc } from "./open.ts";
-import { cardMatches, filterEpics, filterValue, mergeValue, rollbackColumns, stampEpic } from "./visible.ts";
+import { cardMatches, filterEpics, filterValue, groupEpics, mergeValue, rollbackColumns, stampEpic } from "./visible.ts";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -45,20 +45,34 @@ import { cn } from "~/lib/utils";
 import { useDefaultLayout } from "react-resizable-panels";
 
 const COLLAPSED_KEY = "collapsed-columns";
+const COLLAPSED_EPIC_STATUS_KEY = "collapsed-epic-statuses";
+const DEFAULT_COLLAPSED_EPIC_STATUS = [
+  "In Progress",
+  "Completed",
+  "Cancelled",
+  "Canceled",
+];
 
-function readCollapsed(): Set<string> {
+function readCollapsed(key = COLLAPSED_KEY, fallback: string[] = []): Set<string> {
   try {
-    const raw = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]");
+    const stored = localStorage.getItem(key);
+    if (stored === null) return new Set(fallback);
+    const raw = JSON.parse(stored);
     return new Set(
-      Array.isArray(raw) ? raw.filter((item) => typeof item === "string") : [],
+      Array.isArray(raw) ? raw.filter((item) => typeof item === "string") : fallback,
     );
   } catch {
-    return new Set();
+    return new Set(fallback);
   }
 }
 
-function writeCollapsed(next: Set<string>) {
-  localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]));
+function writeCollapsed(next: Set<string>, key = COLLAPSED_KEY) {
+  localStorage.setItem(key, JSON.stringify([...next]));
+}
+
+function hasStatus(collapsed: Set<string>, status: string) {
+  const needle = status.toLowerCase();
+  return [...collapsed].some((item) => item.toLowerCase() === needle);
 }
 
 type BoardPayload = Board & { flags?: string };
@@ -262,6 +276,94 @@ function StatusColumn({
   );
 }
 
+function EpicButton({
+  epic,
+  selected,
+  count,
+  onSelect,
+}: {
+  epic: Epic;
+  selected: boolean;
+  count: number;
+  onSelect: (key: string | null) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`rounded-md px-3 py-2 text-left ${
+        selected ? "bg-accent text-accent-foreground" : "hover:bg-muted"
+      }`}
+      onClick={() => void onSelect(epic.key)}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium tabular-nums">{epic.key}</span>
+        <Badge variant="outline">{count}</Badge>
+      </div>
+      <span className="mt-1 line-clamp-2 text-sm">{epic.summary}</span>
+    </button>
+  );
+}
+
+function EpicStatusGroup({
+  status,
+  epics,
+  selectedEpic,
+  childCount,
+  onSelect,
+}: {
+  status: string;
+  epics: Epic[];
+  selectedEpic: string | null;
+  childCount: (key: string) => number;
+  onSelect: (key: string | null) => void;
+}) {
+  const [open, setOpen] = useState(
+    () => !hasStatus(readCollapsed(COLLAPSED_EPIC_STATUS_KEY, DEFAULT_COLLAPSED_EPIC_STATUS), status),
+  );
+  function changeOpen(next: boolean) {
+    setOpen(next);
+    const collapsed = readCollapsed(COLLAPSED_EPIC_STATUS_KEY, DEFAULT_COLLAPSED_EPIC_STATUS);
+    if (next) {
+      for (const item of [...collapsed]) {
+        if (item.toLowerCase() === status.toLowerCase()) collapsed.delete(item);
+      }
+    } else {
+      collapsed.add(status);
+    }
+    writeCollapsed(collapsed, COLLAPSED_EPIC_STATUS_KEY);
+  }
+  return (
+    <Collapsible open={open} onOpenChange={changeOpen} className="flex flex-col">
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="hover:bg-muted flex items-center gap-2 rounded-md px-3 py-2 text-left"
+        >
+          <ChevronDownIcon
+            className={cn(
+              "size-4 shrink-0 transition-transform",
+              !open && "-rotate-90",
+            )}
+          />
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">{status}</span>
+          <Badge variant="outline">{epics.length}</Badge>
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="flex flex-col gap-1">
+        {epics.map((epic) => (
+          <EpicButton
+            key={epic.key}
+            epic={epic}
+            selected={selectedEpic === epic.key}
+            count={childCount(epic.key)}
+            onSelect={onSelect}
+          />
+        ))}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 export function App() {
   const [columns, setColumns] = useState<Record<string, Card[]>>({});
   const [epics, setEpics] = useState<Epic[]>([]);
@@ -282,6 +384,7 @@ export function App() {
     () => filterEpics(epics, Object.values(columns).flat(), search),
     [epics, columns, search],
   );
+  const epicGroups = useMemo(() => groupEpics(visibleEpics), [visibleEpics]);
   const columnIds = Object.keys(visible);
   const shellIds = openUrl ? ["epics", "board", "open"] : ["epics", "board"];
   const shellLayout = useDefaultLayout({
@@ -468,7 +571,7 @@ export function App() {
           <aside className="bg-background flex h-full min-h-0 flex-col border-r">
             <div className="flex items-center justify-between px-4 py-3">
               <span className="text-sm font-semibold">Epics</span>
-              <Badge variant="outline">{epics.length}</Badge>
+              <Badge variant="outline">{visibleEpics.length}</Badge>
             </div>
             <nav className="flex flex-1 flex-col gap-1 overflow-auto px-2 pb-3">
               <button
@@ -482,26 +585,28 @@ export function App() {
               >
                 All stories
               </button>
-              {visibleEpics.map((epic) => (
-                <button
-                  key={epic.key}
-                  type="button"
-                  className={`rounded-md px-3 py-2 text-left ${
-                    selectedEpic === epic.key
-                      ? "bg-accent text-accent-foreground"
-                      : "hover:bg-muted"
-                  }`}
-                  onClick={() => void selectEpic(epic.key)}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium tabular-nums">
-                      {epic.key}
-                    </span>
-                    <Badge variant="outline">{childCount(epic.key)}</Badge>
-                  </div>
-                  <span className="mt-1 line-clamp-2 text-sm">{epic.summary}</span>
-                </button>
-              ))}
+              {epicGroups.map((group) =>
+                group.status ? (
+                  <EpicStatusGroup
+                    key={group.status}
+                    status={group.status}
+                    epics={group.epics}
+                    selectedEpic={selectedEpic}
+                    childCount={childCount}
+                    onSelect={selectEpic}
+                  />
+                ) : (
+                  group.epics.map((epic) => (
+                    <EpicButton
+                      key={epic.key}
+                      epic={epic}
+                      selected={selectedEpic === epic.key}
+                      count={childCount(epic.key)}
+                      onSelect={selectEpic}
+                    />
+                  ))
+                ),
+              )}
             </nav>
           </aside>
         </ResizablePanel>

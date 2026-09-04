@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 
 import type { Card, Epic } from "./board.ts";
-import { filterEpics, filterValue, mergeValue, rollbackColumns, stampEpic } from "./visible.ts";
+import { filterEpics, filterValue, groupEpics, mergeValue, rollbackColumns, stampEpic } from "./visible.ts";
 
 const child: Card = { key: "DEMO-2", summary: "child", epic: "DEMO-1" };
 const other: Card = { key: "DEMO-9", summary: "other", epic: "DEMO-8" };
@@ -125,7 +125,7 @@ test("Search keeps an Epic that matches or has a matching Card", () => {
   ]);
 });
 
-test("left pane hides In Progress, Completed, and Cancelled Epics", () => {
+test("left pane keeps In Progress, Completed, and Cancelled Epics", () => {
   const open: Epic = { key: "DEMO-1", summary: "Open", status: "To Do" };
   const progress: Epic = { key: "DEMO-8", summary: "Busy", status: "In Progress" };
   const done: Epic = { key: "DEMO-9", summary: "Finished", status: "Completed" };
@@ -133,6 +133,23 @@ test("left pane hides In Progress, Completed, and Cancelled Epics", () => {
   const unknown: Epic = { key: "DEMO-11", summary: "Parent only" };
   expect(filterEpics([open, progress, done, cancelled, unknown], [], "")).toEqual([
     open,
+    progress,
+    done,
+    cancelled,
     unknown,
+  ]);
+});
+
+test("Epics group by first-seen status", () => {
+  const open: Epic = { key: "DEMO-1", summary: "Open", status: "To Do" };
+  const progress: Epic = { key: "DEMO-8", summary: "Busy", status: "In Progress" };
+  const done: Epic = { key: "DEMO-9", summary: "Finished", status: "Completed" };
+  const alsoOpen: Epic = { key: "DEMO-12", summary: "More", status: "To Do" };
+  const unknown: Epic = { key: "DEMO-11", summary: "Parent only" };
+  expect(groupEpics([open, progress, done, alsoOpen, unknown])).toEqual([
+    { status: "To Do", epics: [open, alsoOpen] },
+    { status: "In Progress", epics: [progress] },
+    { status: "Completed", epics: [done] },
+    { status: "", epics: [unknown] },
   ]);
 });

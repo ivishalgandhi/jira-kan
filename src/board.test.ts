@@ -41,7 +41,7 @@ test("Epics leave the Board and children keep the Epic key", () => {
   expect(board.epics[0]).toEqual({
     key: "DEMO-1",
     summary: "Ship a local kanban",
-    status: "To Do",
+    status: "In Progress",
     priority: "High",
     assignee: "Person A",
     dueDate: "Sep 10, 2026",

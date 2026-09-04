@@ -54,25 +54,37 @@ export function filterValue(
   );
 }
 
-const hiddenEpicStatus = new Set([
-  "in progress",
-  "completed",
-  "cancelled",
-  "canceled",
-]);
-
-export function epicInPane(epic: Epic) {
-  return !hiddenEpicStatus.has((epic.status ?? "").toLowerCase());
-}
-
 export function filterEpics(epics: Epic[], cards: Card[], query: string) {
-  const pane = epics.filter(epicInPane);
-  if (!needle(query)) return pane;
-  return pane.filter(
+  if (!needle(query)) return epics;
+  return epics.filter(
     (epic) =>
       epicMatches(epic, query) ||
       cards.some((card) => card.epic === epic.key && cardMatches(card, query)),
   );
+}
+
+export function groupEpics(epics: Epic[]): { status: string; epics: Epic[] }[] {
+  const groups = new Map<string, Epic[]>();
+  const order: string[] = [];
+  const none: Epic[] = [];
+  for (const epic of epics) {
+    const status = epic.status?.trim() ?? "";
+    if (!status) {
+      none.push(epic);
+      continue;
+    }
+    const list = groups.get(status);
+    if (!list) {
+      groups.set(status, [epic]);
+      order.push(status);
+      continue;
+    }
+    list.push(epic);
+  }
+  return [
+    ...order.map((status) => ({ status, epics: groups.get(status) ?? [] })),
+    ...(none.length ? [{ status: "", epics: none }] : []),
+  ];
 }
 
 export function mergeValue(
