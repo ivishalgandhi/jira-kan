@@ -36,6 +36,24 @@ import {
   ResizablePanelGroup,
 } from "~/components/ui/resizable";
 import { cn } from "~/lib/utils";
+import { useDefaultLayout } from "react-resizable-panels";
+
+const COLLAPSED_KEY = "collapsed-columns";
+
+function readCollapsed(): Set<string> {
+  try {
+    const raw = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]");
+    return new Set(
+      Array.isArray(raw) ? raw.filter((item) => typeof item === "string") : [],
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function writeCollapsed(next: Set<string>) {
+  localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]));
+}
 
 type BoardPayload = Board & { flags?: string };
 type Theme = "light" | "dark";
@@ -159,12 +177,22 @@ function StatusColumn({
   disabled?: boolean;
   onOpen?: (key: string) => void;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(
+    () => isOverlay || !readCollapsed().has(title),
+  );
+  function changeOpen(next: boolean) {
+    setOpen(next);
+    if (isOverlay) return;
+    const collapsed = readCollapsed();
+    if (next) collapsed.delete(title);
+    else collapsed.add(title);
+    writeCollapsed(collapsed);
+  }
   return (
     <KanbanColumn value={title} className="h-full min-h-0">
       <Collapsible
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={changeOpen}
         className={cn("flex h-full min-h-0 flex-col", !open && "h-auto")}
       >
         <UiCard
@@ -235,6 +263,18 @@ export function App() {
     () => filterValue(columns, selectedEpic),
     [columns, selectedEpic],
   );
+  const columnIds = Object.keys(visible);
+  const shellIds = openUrl ? ["epics", "board", "open"] : ["epics", "board"];
+  const shellLayout = useDefaultLayout({
+    id: "shell",
+    panelIds: shellIds,
+    onlySaveAfterUserInteractions: true,
+  });
+  const columnLayout = useDefaultLayout({
+    id: "columns",
+    panelIds: columnIds,
+    onlySaveAfterUserInteractions: true,
+  });
   const embed = openUrl
     ? frameSrc(openUrl, window.location.origin)
     : null;
@@ -374,6 +414,8 @@ export function App() {
         id="shell"
         orientation="horizontal"
         className="min-h-0 flex-1"
+        defaultLayout={shellLayout.defaultLayout}
+        onLayoutChanged={shellLayout.onLayoutChanged}
       >
         <ResizablePanel
           id="epics"
@@ -440,11 +482,14 @@ export function App() {
               restoreOnCancel
               onValueCommit={commit}
             >
-              <KanbanBoard className="grid h-full min-h-0 grid-cols-1 sm:grid-cols-1 auto-rows-fr">
+              <KanbanBoard className="grid h-full min-h-0 grid-cols-1 auto-rows-fr">
+                {columnIds.length ? (
                 <ResizablePanelGroup
                   id="columns"
                   orientation="horizontal"
                   className="min-h-0"
+                  defaultLayout={columnLayout.defaultLayout}
+                  onLayoutChanged={columnLayout.onLayoutChanged}
                 >
                   {Object.entries(visible).map(([title, cards], index, all) => (
                     <Fragment key={title}>
@@ -465,6 +510,7 @@ export function App() {
                     </Fragment>
                   ))}
                 </ResizablePanelGroup>
+                ) : null}
               </KanbanBoard>
               <KanbanOverlay>
                 {({ value, variant }) => {
