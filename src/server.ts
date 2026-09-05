@@ -46,6 +46,10 @@ export async function runServer(opts: {
   await new Promise<void>((resolve) => server.listen(port, host, resolve));
   const origin = `http://127.0.0.1:${port}`;
   const fakeConfig = writeJiraConfig(join(tmpdir(), "pipe-kan"), origin);
+  console.log(`pipe-kan http://${host}:${port}`);
+  console.log(`cli ${kind === "jira" ? resolveJiraBin() : "store"}`);
+  console.log(`Fake Jira ${origin}/rest/api/2/search`);
+  console.log(`Fake Jira config ${fakeConfig}`);
 
   if (kind === "jira") {
     try {
@@ -56,8 +60,4 @@ export async function runServer(opts: {
     }
   }
 
-  console.log(`pipe-kan http://${host}:${port}`);
-  console.log(`cli ${kind === "jira" ? resolveJiraBin() : "store"}`);
-  console.log(`Fake Jira ${origin}/rest/api/2/search`);
-  console.log(`Fake Jira config ${fakeConfig}`);
 }

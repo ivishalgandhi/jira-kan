@@ -418,6 +418,77 @@ test("a failed children call keeps the Board and falls counts back", async () =>
   expect(board.error).toBe("children list failed");
 });
 
+test("Refresh keeps the last Board until children land", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const cli: Cli = {
+    async list() {
+      return JSON.stringify([
+        {
+          key: "WORK-2",
+          fields: {
+            summary: "Work story",
+            status: { name: "To Do" },
+            issuetype: { name: "Story" },
+            parent: { key: "WORK-1" },
+          },
+        },
+      ]);
+    },
+    async listEpics() {
+      return JSON.stringify([
+        {
+          key: "WORK-1",
+          fields: {
+            summary: "Work epic",
+            status: { name: "To Do" },
+            issuetype: { name: "Epic" },
+          },
+        },
+      ]);
+    },
+    async listEpic() {
+      return "[]";
+    },
+    async listChildren() {
+      await gate;
+      return JSON.stringify([
+        {
+          key: "WORK-2",
+          fields: {
+            summary: "Work story",
+            status: { name: "To Do" },
+            issuetype: { name: "Story" },
+            parent: { key: "WORK-1" },
+          },
+        },
+      ]);
+    },
+    async move() {
+      return { ok: true };
+    },
+    async open() {
+      return "/browse/X";
+    },
+    async view() {
+      return JSON.stringify({ key: "X", fields: {} });
+    },
+  };
+  const app = createApp({ store: IssueStore.fromRaw(fixture), cli });
+  app.hydrate(fixture, { fromStore: true });
+  const pending = app.refresh();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const mid = app.board();
+  expect(mid.epics.map((epic) => epic.key)).toEqual(["DEMO-1", "DEMO-7", "DEMO-8"]);
+  expect(childKeys(mid)).toEqual(["DEMO-2", "DEMO-3", "DEMO-4", "DEMO-5"]);
+  release();
+  const done = await pending;
+  expect(done.epics.map((epic) => epic.key)).toEqual(["WORK-1"]);
+  expect(childKeys(done)).toEqual(["WORK-2"]);
+});
+
 test("select falls back to listEpic when cached children lost their Epic key", async () => {
   const calls: string[] = [];
   const unmapped = [

@@ -92,30 +92,39 @@ export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
     },
     async refresh(next) {
       if (next !== undefined) flags = next;
-      childrenError = undefined;
       const [issues, epics] = await Promise.all([
         cli.list(flags),
         cli.listEpics(),
       ]);
-      payload = JSON.parse(issues);
-      epicsPayload = JSON.parse(epics);
-      const keys = listedEpicKeys();
+      const nextPayload = JSON.parse(issues);
+      const nextEpics = JSON.parse(epics);
+      const keys = issuesToBoard(nextEpics).epics.map((epic) => epic.key);
+      let nextChildren: unknown[] = [];
+      let nextHasCache = false;
+      let nextError: string | undefined;
       try {
-        childrenRaw = JSON.parse(await cli.listChildren(keys));
-        const cards = cardsOf(childrenRaw);
+        nextChildren = JSON.parse(await cli.listChildren(keys));
+        const cards = cardsOf(nextChildren);
         if (cards.length > 0 && !cards.some((card) => card.epic)) {
-          const stamped: unknown[] = [];
-          for (const key of keys) {
-            stamped.push(...stampRawParent(JSON.parse(await cli.listEpic(key)), key));
-          }
-          childrenRaw = stamped;
+          nextChildren = (
+            await Promise.all(
+              keys.map(async (key) =>
+                stampRawParent(JSON.parse(await cli.listEpic(key)), key),
+              ),
+            )
+          ).flat();
         }
-        hasChildrenCache = true;
+        nextHasCache = true;
       } catch (err) {
-        hasChildrenCache = false;
-        childrenRaw = [];
-        childrenError = err instanceof Error ? err.message : "Epic children list failed";
+        nextHasCache = false;
+        nextChildren = [];
+        nextError = err instanceof Error ? err.message : "Epic children list failed";
       }
+      payload = nextPayload;
+      epicsPayload = nextEpics;
+      childrenRaw = nextChildren;
+      hasChildrenCache = nextHasCache;
+      childrenError = nextError;
       return app.board();
     },
     async children(epic) {
