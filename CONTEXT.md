@@ -29,11 +29,11 @@ An Issue of type Epic. It lives in the left pane, listed from `jira issue list -
 _Avoid_: parent (jira-cli's `-P` flag name)
 
 **Favourite**:
-A user-curated Epic in a collapsible group between All stories and the Epics heading. Clicking it still shows only its children. Local only; not Scope, Filter, or Hide.
+A user-curated Epic in a collapsible group between All stories and Presets. Clicking it still shows only its children. Local only; not Scope, Filter, Hide, or Preset.
 _Avoid_: pin, bookmark, star (the control)
 
 **Folder**:
-A named, one-level group of Favourites in the left pane. Local only; not Scope, Filter, Hide, or an Epic status group.
+A named, one-level group of Favourites in the left pane. Local only; not Scope, Filter, Hide, Preset, or an Epic status group.
 _Avoid_: directory, collection, project (when meaning this)
 
 **Scope**:
@@ -46,15 +46,19 @@ _Avoid_: filter, query (when meaning this)
 
 **Filter**:
 Persisted Board controls that hide Cards without changing Scope or Refresh. An Epic row stays when the Epic's own field matches or a remaining child matches; it hides when neither does.
-_Avoid_: Search, Scope, Sort, query
+_Avoid_: Search, Scope, Sort, Preset, query
 
 **Sort**:
 Persisted order of Cards inside each Column.
-_Avoid_: Filter, Search, order-by (jira-cli's list flag)
+_Avoid_: Filter, Search, Preset, order-by (jira-cli's list flag)
 
 **Hide**:
 User action that removes a Column from the Board until they put it back. Distinct from collapse (thin the Column) and from omitting a status that has no Issues.
 _Avoid_: collapse, remove (when meaning this)
+
+**Preset**:
+A named, local snapshot of Filter, Sort, and Hide. Listed in a collapsible group after Favourites. Apply copies it into last-used chrome; Save names the current last-used chrome. Not Scope, Search, Favourite, or Open.
+_Avoid_: view, layout, saved filter
 
 **Pipe**:
 stdin carrying `jira issue list --raw` JSON into the app.
