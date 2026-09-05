@@ -78,7 +78,7 @@ Contributors still `bun install` and `bun run dev` (Vite). `bun run build` write
 
 ## Version
 
-Pushes to `main` run tests, then [semantic-release](https://semantic-release.gitbook.io). It reads conventional commits since the last `v*` tag:
+Pushes to `main` run `bun audit --audit-level=high`, tests, then [semantic-release](https://semantic-release.gitbook.io). High or critical dependency CVEs fail the job before a tag or publish. Dependabot opens weekly PRs for `bun` and GitHub Actions. It reads conventional commits since the last `v*` tag:
 
 | Commit | Bump |
 | --- | --- |
