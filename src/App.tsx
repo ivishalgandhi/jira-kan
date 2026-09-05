@@ -20,6 +20,7 @@ import {
   addFolder,
   cardMatches,
   filterEpics,
+  filterFacets,
   filterValue,
   groupEpics,
   listedFavourites,
@@ -30,6 +31,7 @@ import {
   rollbackColumns,
   stampEpic,
   toggleFavourite,
+  type BoardFilter,
   type BoardSort,
   type FavouriteState,
   type VisibleOpts,
@@ -89,13 +91,13 @@ const DEFAULT_COLLAPSED_EPIC_STATUS = [
 ];
 
 type Chrome = {
-  filter: { priorities: string[]; assignees: string[] };
+  filter: BoardFilter;
   sort: BoardSort;
   hide: string[];
 };
 
 const DEFAULT_CHROME: Chrome = {
-  filter: { priorities: [], assignees: [] },
+  filter: {},
   sort: "payload",
   hide: [],
 };
@@ -123,20 +125,33 @@ function hasStatus(collapsed: Set<string>, status: string) {
   return [...collapsed].some((item) => item.toLowerCase() === needle);
 }
 
+function readFilter(raw?: BoardFilter & { priorities?: string[]; assignees?: string[] }): BoardFilter {
+  if (!raw || typeof raw !== "object") return {};
+  const next: BoardFilter = {};
+  for (const [key, values] of Object.entries(raw)) {
+    if (key === "priorities" || key === "assignees") continue;
+    if (Array.isArray(values)) {
+      next[key] = values.filter((item) => typeof item === "string");
+    }
+  }
+  if (Array.isArray(raw.priorities) && !next.priority) {
+    next.priority = raw.priorities.filter((item) => typeof item === "string");
+  }
+  if (Array.isArray(raw.assignees) && !next.assignee) {
+    next.assignee = raw.assignees.filter((item) => typeof item === "string");
+  }
+  return next;
+}
+
 function readChrome(): Chrome {
   try {
     const stored = localStorage.getItem(CHROME_KEY);
     if (stored === null) return DEFAULT_CHROME;
-    const raw = JSON.parse(stored) as Partial<Chrome>;
+    const raw = JSON.parse(stored) as Partial<Chrome> & {
+      filter?: BoardFilter & { priorities?: string[]; assignees?: string[] };
+    };
     return {
-      filter: {
-        priorities: Array.isArray(raw.filter?.priorities)
-          ? raw.filter.priorities.filter((item) => typeof item === "string")
-          : [],
-        assignees: Array.isArray(raw.filter?.assignees)
-          ? raw.filter.assignees.filter((item) => typeof item === "string")
-          : [],
-      },
+      filter: readFilter(raw.filter),
       sort:
         raw.sort === "priority" || raw.sort === "age" || raw.sort === "due" || raw.sort === "key"
           ? raw.sort
@@ -671,11 +686,7 @@ export function App() {
   const embed = openUrl
     ? frameSrc(openUrl, window.location.origin)
     : null;
-  const priorityOptions = [...new Set(allCards.map((card) => card.priority).filter((item): item is string => Boolean(item)))].sort();
-  const assigneeOptions = [
-    ...new Set(allCards.map((card) => card.assignee).filter((item): item is string => Boolean(item))),
-    ...(allCards.some((card) => !card.assignee) ? ["Unassigned"] : []),
-  ];
+  const facets = filterFacets(allCards);
   const memoryStatuses = Object.keys(columns);
   const showFavourites =
     favouritePane.unfiled.length > 0 || favouritePane.folders.length > 0;
@@ -956,44 +967,30 @@ export function App() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel>Priority</DropdownMenuLabel>
-                    {priorityOptions.map((priority) => (
-                      <DropdownMenuCheckboxItem
-                        key={priority}
-                        checked={chrome.filter.priorities.includes(priority)}
-                        onCheckedChange={() =>
-                          persistChrome({
-                            ...chrome,
-                            filter: {
-                              ...chrome.filter,
-                              priorities: toggleList(chrome.filter.priorities, priority),
-                            },
-                          })
-                        }
-                      >
-                        {priority}
-                      </DropdownMenuCheckboxItem>
+                    {facets.map((facet, index) => (
+                      <Fragment key={facet.key}>
+                        {index > 0 ? <DropdownMenuSeparator /> : null}
+                        <DropdownMenuLabel>{facet.label}</DropdownMenuLabel>
+                        {facet.values.map((value) => (
+                          <DropdownMenuCheckboxItem
+                            key={value}
+                            checked={(chrome.filter[facet.key] ?? []).includes(value)}
+                            onCheckedChange={() =>
+                              persistChrome({
+                                ...chrome,
+                                filter: {
+                                  ...chrome.filter,
+                                  [facet.key]: toggleList(chrome.filter[facet.key] ?? [], value),
+                                },
+                              })
+                            }
+                          >
+                            {value}
+                          </DropdownMenuCheckboxItem>
+                        ))}
+                      </Fragment>
                     ))}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Assignee</DropdownMenuLabel>
-                    {assigneeOptions.map((assignee) => (
-                      <DropdownMenuCheckboxItem
-                        key={assignee}
-                        checked={chrome.filter.assignees.includes(assignee)}
-                        onCheckedChange={() =>
-                          persistChrome({
-                            ...chrome,
-                            filter: {
-                              ...chrome.filter,
-                              assignees: toggleList(chrome.filter.assignees, assignee),
-                            },
-                          })
-                        }
-                      >
-                        {assignee}
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                    <DropdownMenuSeparator />
+                    {facets.length ? <DropdownMenuSeparator /> : null}
                     <DropdownMenuItem onClick={() => persistChrome(DEFAULT_CHROME)}>
                       Clear Filter, Sort, and Hide
                     </DropdownMenuItem>

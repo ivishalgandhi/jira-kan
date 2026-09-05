@@ -5,11 +5,13 @@ import {
   addFolder,
   favouriteGroup,
   filterEpics,
+  filterFacets,
   filterValue,
   groupEpics,
   listedFavourites,
   mergeValue,
   moveFavourite,
+  priorityRank,
   removeFolder,
   renameFolder,
   rollbackColumns,
@@ -199,7 +201,7 @@ const columns = {
 
 test("Filter by priority keeps matching Cards", () => {
   expect(
-    filterValue(columns, null, "", { filter: { priorities: ["High", "Critical"] } }),
+    filterValue(columns, null, "", { filter: { priority: ["High", "Critical"] } }),
   ).toEqual({
     "To Do": [high],
     "In Progress": [critical],
@@ -208,20 +210,63 @@ test("Filter by priority keeps matching Cards", () => {
 
 test("Filter Unassigned keeps Cards with no person", () => {
   expect(
-    filterValue(columns, null, "", { filter: { assignees: ["Unassigned"] } }),
+    filterValue(columns, null, "", { filter: { assignee: ["Unassigned"] } }),
   ).toEqual({ "To Do": [medium] });
 });
 
 test("Filter ANDs with Search and the selected Epic", () => {
   expect(
-    filterValue(columns, "DEMO-1", "high", { filter: { priorities: ["High"] } }),
+    filterValue(columns, "DEMO-1", "high", { filter: { priority: ["High"] } }),
   ).toEqual({ "To Do": [high] });
 });
 
 test("Filter omits a Column with no remaining Cards", () => {
   expect(
-    filterValue(columns, null, "", { filter: { assignees: ["Person B"] } }),
+    filterValue(columns, null, "", { filter: { assignee: ["Person B"] } }),
   ).toEqual({ "In Progress": [critical] });
+});
+
+test("Filter facets come from Card values", () => {
+  expect(filterFacets([
+    { key: "A", summary: "a", priority: "P1", assignee: "Ada" },
+    { key: "B", summary: "b", priority: "P4" },
+    { key: "C", summary: "c", priority: "P2", assignee: "Ada" },
+    { key: "D", summary: "d", priority: "P3" },
+  ])).toEqual([
+    { key: "priority", label: "Priority", values: ["P1", "P2", "P3", "P4"] },
+    { key: "assignee", label: "Assignee", values: ["Ada", "Unassigned"] },
+  ]);
+  expect(filterFacets([
+    { key: "T1", summary: "t", priority: "H" },
+    { key: "T2", summary: "t", priority: "L" },
+    { key: "T3", summary: "t", priority: "M" },
+  ])).toEqual([
+    { key: "priority", label: "Priority", values: ["H", "M", "L"] },
+  ]);
+});
+
+test("Filter keeps Jira P-numbers and Taskwarrior names", () => {
+  const p2: Card = { key: "J-2", summary: "p2", priority: "P2" };
+  const p4: Card = { key: "J-4", summary: "p4", priority: "P4" };
+  const high: Card = { key: "T-H", summary: "hi", priority: "high" };
+  expect(
+    filterValue({ "To Do": [p2, p4, high] }, null, "", { filter: { priority: ["P2", "high"] } }),
+  ).toEqual({ "To Do": [p2, high] });
+});
+
+test("priority rank is P-numbers then named scales, missing last", () => {
+  expect(["P4", "P1", "P3", "P2"].sort((a, b) => priorityRank(a) - priorityRank(b) || a.localeCompare(b))).toEqual([
+    "P1",
+    "P2",
+    "P3",
+    "P4",
+  ]);
+  expect(["low", "H", "medium"].sort((a, b) => priorityRank(a) - priorityRank(b) || a.localeCompare(b))).toEqual([
+    "H",
+    "medium",
+    "low",
+  ]);
+  expect(priorityRank(undefined)).toBeGreaterThan(priorityRank("P4"));
 });
 
 test("Sort by priority uses the shared rank and missing last", () => {
@@ -281,7 +326,7 @@ test("merge under Filter keeps hidden Cards", () => {
       columns,
       null,
       "",
-      { filter: { assignees: ["Person B"] } },
+      { filter: { assignee: ["Person B"] } },
     ),
   ).toEqual(columns);
 });

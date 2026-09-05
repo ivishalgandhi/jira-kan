@@ -1,8 +1,11 @@
 import type { Card, Epic } from "./board.ts";
 
-export type BoardFilter = {
-  priorities?: string[];
-  assignees?: string[];
+export type BoardFilter = Record<string, string[]>;
+
+export type FilterFacet = {
+  key: string;
+  label: string;
+  values: string[];
 };
 
 export type BoardSort = "payload" | "priority" | "age" | "due" | "key";
@@ -57,26 +60,78 @@ export function epicMatches(epic: Epic, query: string) {
 
 export function priorityRank(priority?: string): number {
   const value = (priority ?? "").trim().toLowerCase();
-  if (!value) return 4;
-  if (value === "p1" || value === "highest" || value === "critical") return 0;
-  if (value === "p2" || value === "high") return 1;
-  if (value === "p3" || value === "medium") return 2;
-  return 3;
+  if (!value) return 1000;
+  const numbered = /^p(\d+)$/.exec(value);
+  if (numbered) return Number(numbered[1]);
+  const named: Record<string, number> = {
+    highest: 1,
+    critical: 1,
+    blocker: 1,
+    high: 2,
+    h: 2,
+    medium: 3,
+    med: 3,
+    m: 3,
+    normal: 3,
+    low: 4,
+    l: 4,
+    lowest: 5,
+    trivial: 5,
+  };
+  return named[value] ?? 100;
+}
+
+function cardField(card: Card, field: string): string {
+  if (field === "assignee") return card.assignee ?? "Unassigned";
+  if (field === "priority") return card.priority ?? "";
+  return "";
 }
 
 function hasFilter(filter?: BoardFilter) {
-  return Boolean(filter?.priorities?.length || filter?.assignees?.length);
+  return Boolean(filter && Object.values(filter).some((values) => values.length > 0));
 }
 
 function cardMatchesFilter(card: Card, filter?: BoardFilter) {
   if (!hasFilter(filter)) return true;
-  if (filter?.priorities?.length && !filter.priorities.includes(card.priority ?? "")) {
-    return false;
+  return Object.entries(filter!).every(
+    ([field, selected]) => !selected.length || selected.includes(cardField(card, field)),
+  );
+}
+
+function uniqueSorted(values: string[], compare: (a: string, b: string) => number) {
+  return [...new Set(values)].sort(compare);
+}
+
+export function filterFacets(cards: Card[]): FilterFacet[] {
+  const facets: FilterFacet[] = [];
+  const priorities = cards
+    .map((card) => card.priority)
+    .filter((value): value is string => Boolean(value));
+  if (priorities.length) {
+    facets.push({
+      key: "priority",
+      label: "Priority",
+      values: uniqueSorted(
+        priorities,
+        (a, b) => priorityRank(a) - priorityRank(b) || a.localeCompare(b),
+      ),
+    });
   }
-  if (filter?.assignees?.length) {
-    return filter.assignees.includes(card.assignee ?? "Unassigned");
+  const assignees = cards
+    .map((card) => card.assignee)
+    .filter((value): value is string => Boolean(value));
+  const unassigned = cards.some((card) => !card.assignee);
+  if (assignees.length) {
+    facets.push({
+      key: "assignee",
+      label: "Assignee",
+      values: [
+        ...uniqueSorted(assignees, (a, b) => a.localeCompare(b)),
+        ...(unassigned ? ["Unassigned"] : []),
+      ],
+    });
   }
-  return true;
+  return facets;
 }
 
 function omitted(card: Card, epic: string | null, query: string, filter?: BoardFilter) {
