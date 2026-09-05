@@ -233,16 +233,78 @@ test("Filter facets come from Card values", () => {
     { key: "C", summary: "c", priority: "P2", assignee: "Ada" },
     { key: "D", summary: "d", priority: "P3" },
   ])).toEqual([
-    { key: "priority", label: "Priority", values: ["P1", "P2", "P3", "P4"] },
-    { key: "assignee", label: "Assignee", values: ["Ada", "Unassigned"] },
+    { key: "priority", label: "Priority", group: "Priority", values: ["P1", "P2", "P3", "P4"] },
+    { key: "assignee", label: "Stories", group: "Assignee", values: ["Ada", "Unassigned"] },
   ]);
   expect(filterFacets([
     { key: "T1", summary: "t", priority: "H" },
     { key: "T2", summary: "t", priority: "L" },
     { key: "T3", summary: "t", priority: "M" },
   ])).toEqual([
-    { key: "priority", label: "Priority", values: ["H", "M", "L"] },
+    { key: "priority", label: "Priority", group: "Priority", values: ["H", "M", "L"] },
   ]);
+});
+
+test("Filter facets include Labels and Epic assignee", () => {
+  expect(filterFacets(
+    [
+      { key: "A", summary: "a", epic: "E1", labels: ["kanban", "scope"], assignee: "Ada" },
+      { key: "B", summary: "b", epic: "E2", labels: ["scope"] },
+    ],
+    [
+      { key: "E1", summary: "One", assignee: "Pat" },
+      { key: "E2", summary: "Two" },
+    ],
+  )).toEqual([
+    {
+      key: "epicAssignee",
+      label: "Epic",
+      group: "Assignee",
+      values: ["Pat", "Unassigned"],
+    },
+    { key: "assignee", label: "Stories", group: "Assignee", values: ["Ada", "Unassigned"] },
+    { key: "labels", label: "Labels", group: "Labels", values: ["kanban", "scope"] },
+  ]);
+});
+
+test("Filter by labels keeps Cards with any selected label", () => {
+  const tagged: Card = { key: "A", summary: "a", labels: ["kanban"] };
+  const both: Card = { key: "B", summary: "b", labels: ["scope", "error"] };
+  const plain: Card = { key: "C", summary: "c" };
+  expect(
+    filterValue({ "To Do": [tagged, both, plain] }, null, "", {
+      filter: { labels: ["scope", "kanban"] },
+    }),
+  ).toEqual({ "To Do": [tagged, both] });
+});
+
+test("Filter by Epic assignee keeps children of those Epics", () => {
+  const patChild: Card = { key: "A", summary: "a", epic: "E1" };
+  const adaChild: Card = { key: "B", summary: "b", epic: "E2" };
+  expect(
+    filterValue({ "To Do": [patChild, adaChild] }, null, "", {
+      filter: { epicAssignee: ["Pat"] },
+      epics: [
+        { key: "E1", summary: "One", assignee: "Pat" },
+        { key: "E2", summary: "Two", assignee: "Ada" },
+      ],
+    }),
+  ).toEqual({ "To Do": [patChild] });
+});
+
+test("Filter Unassigned Epic assignee keeps Cards whose Epic has no person", () => {
+  const assigned: Card = { key: "A", summary: "a", epic: "E1" };
+  const bareEpic: Card = { key: "B", summary: "b", epic: "E2" };
+  const orphan: Card = { key: "C", summary: "c" };
+  expect(
+    filterValue({ "To Do": [assigned, bareEpic, orphan] }, null, "", {
+      filter: { epicAssignee: ["Unassigned"] },
+      epics: [
+        { key: "E1", summary: "One", assignee: "Pat" },
+        { key: "E2", summary: "Two" },
+      ],
+    }),
+  ).toEqual({ "To Do": [bareEpic, orphan] });
 });
 
 test("Filter keeps Jira P-numbers and Taskwarrior names", () => {

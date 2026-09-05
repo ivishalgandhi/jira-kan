@@ -34,6 +34,7 @@ import {
   type BoardFilter,
   type BoardSort,
   type FavouriteState,
+  type FilterFacet,
   type VisibleOpts,
 } from "./visible.ts";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
@@ -278,6 +279,106 @@ function priorityClass(priority?: string) {
 
 function toggleList(values: string[], item: string) {
   return values.includes(item) ? values.filter((value) => value !== item) : [...values, item];
+}
+
+function groupedFacets(facets: FilterFacet[]) {
+  const blocks: { group?: string; facets: FilterFacet[] }[] = [];
+  for (const facet of facets) {
+    const last = blocks.at(-1);
+    if (facet.group && last?.group === facet.group) last.facets.push(facet);
+    else blocks.push({ group: facet.group, facets: [facet] });
+  }
+  return blocks;
+}
+
+function FilterValues({
+  facet,
+  selected,
+  onToggle,
+}: {
+  facet: FilterFacet;
+  selected: string[];
+  onToggle: (value: string) => void;
+}) {
+  return (
+    <>
+      {facet.label === facet.group ? null : <DropdownMenuLabel>{facet.label}</DropdownMenuLabel>}
+      {facet.values.map((value) => (
+        <DropdownMenuCheckboxItem
+          key={value}
+          checked={selected.includes(value)}
+          onCheckedChange={() => onToggle(value)}
+        >
+          {value}
+        </DropdownMenuCheckboxItem>
+      ))}
+    </>
+  );
+}
+
+function FilterMenu({
+  facets,
+  filter,
+  onToggle,
+  onClear,
+}: {
+  facets: FilterFacet[];
+  filter: BoardFilter;
+  onToggle: (key: string, value: string) => void;
+  onClear: () => void;
+}) {
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  return (
+    <DropdownMenuContent align="end" className="w-56">
+      {groupedFacets(facets).map((block, index) => {
+        const body = block.facets.map((facet) => (
+          <FilterValues
+            key={facet.key}
+            facet={facet}
+            selected={filter[facet.key] ?? []}
+            onToggle={(value) => onToggle(facet.key, value)}
+          />
+        ));
+        return (
+          <Fragment key={block.group ?? block.facets[0]?.key}>
+            {index > 0 ? <DropdownMenuSeparator /> : null}
+            {block.group ? (
+              <Collapsible
+                open={openGroups[block.group] !== false}
+                onOpenChange={(next) =>
+                  setOpenGroups((current) => ({ ...current, [block.group!]: next }))
+                }
+                className="flex flex-col"
+              >
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] font-medium"
+                    onPointerDown={(event) => event.preventDefault()}
+                  >
+                    <ChevronDownIcon
+                      className={cn(
+                        "size-3.5 shrink-0 transition-transform",
+                        openGroups[block.group] === false && "-rotate-90",
+                      )}
+                    />
+                    {block.group}
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="flex flex-col">
+                  {body}
+                </CollapsibleContent>
+              </Collapsible>
+            ) : (
+              body
+            )}
+          </Fragment>
+        );
+      })}
+      {facets.length ? <DropdownMenuSeparator /> : null}
+      <DropdownMenuItem onClick={onClear}>Clear Filter, Sort, and Hide</DropdownMenuItem>
+    </DropdownMenuContent>
+  );
 }
 
 function IssueCard({
@@ -651,10 +752,10 @@ export function App() {
   const [folderName, setFolderName] = useState("");
   const [folderError, setFolderError] = useState("");
 
-  const visibleOpts: VisibleOpts = chrome;
+  const visibleOpts: VisibleOpts = { ...chrome, epics };
   const visible = useMemo(
     () => filterValue(columns, selectedEpic, search, visibleOpts),
-    [columns, selectedEpic, search, chrome],
+    [columns, selectedEpic, search, chrome, epics],
   );
   const allCards = useMemo(() => Object.values(columns).flat(), [columns]);
   const visibleEpics = useMemo(
@@ -686,7 +787,7 @@ export function App() {
   const embed = openUrl
     ? frameSrc(openUrl, window.location.origin)
     : null;
-  const facets = filterFacets(allCards);
+  const facets = filterFacets(allCards, epics);
   const memoryStatuses = Object.keys(columns);
   const showFavourites =
     favouritePane.unfiled.length > 0 || favouritePane.folders.length > 0;
@@ -956,6 +1057,7 @@ export function App() {
                   className="placeholder:text-muted-foreground h-7 min-w-40 flex-1 rounded-md bg-muted px-2.5 text-[13px] outline-none"
                   value={flags}
                   onChange={(event) => setFlags(event.target.value)}
+                  placeholder="Scope flags"
                   spellCheck={false}
                   aria-label="Scope flags"
                 />
@@ -966,35 +1068,20 @@ export function App() {
                       Filter
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    {facets.map((facet, index) => (
-                      <Fragment key={facet.key}>
-                        {index > 0 ? <DropdownMenuSeparator /> : null}
-                        <DropdownMenuLabel>{facet.label}</DropdownMenuLabel>
-                        {facet.values.map((value) => (
-                          <DropdownMenuCheckboxItem
-                            key={value}
-                            checked={(chrome.filter[facet.key] ?? []).includes(value)}
-                            onCheckedChange={() =>
-                              persistChrome({
-                                ...chrome,
-                                filter: {
-                                  ...chrome.filter,
-                                  [facet.key]: toggleList(chrome.filter[facet.key] ?? [], value),
-                                },
-                              })
-                            }
-                          >
-                            {value}
-                          </DropdownMenuCheckboxItem>
-                        ))}
-                      </Fragment>
-                    ))}
-                    {facets.length ? <DropdownMenuSeparator /> : null}
-                    <DropdownMenuItem onClick={() => persistChrome(DEFAULT_CHROME)}>
-                      Clear Filter, Sort, and Hide
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
+                  <FilterMenu
+                    facets={facets}
+                    filter={chrome.filter}
+                    onToggle={(key, value) =>
+                      persistChrome({
+                        ...chrome,
+                        filter: {
+                          ...chrome.filter,
+                          [key]: toggleList(chrome.filter[key] ?? [], value),
+                        },
+                      })
+                    }
+                    onClear={() => persistChrome(DEFAULT_CHROME)}
+                  />
                 </DropdownMenu>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

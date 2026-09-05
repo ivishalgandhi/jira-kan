@@ -6,6 +6,7 @@ export type FilterFacet = {
   key: string;
   label: string;
   values: string[];
+  group?: string;
 };
 
 export type BoardSort = "payload" | "priority" | "age" | "due" | "key";
@@ -14,6 +15,7 @@ export type VisibleOpts = {
   filter?: BoardFilter;
   sort?: BoardSort;
   hide?: string[];
+  epics?: Epic[];
 };
 
 export type FavouriteFolder = {
@@ -81,20 +83,32 @@ export function priorityRank(priority?: string): number {
   return named[value] ?? 100;
 }
 
-function cardField(card: Card, field: string): string {
-  if (field === "assignee") return card.assignee ?? "Unassigned";
-  if (field === "priority") return card.priority ?? "";
-  return "";
+function epicByKey(epics: Epic[] = []) {
+  return new Map(epics.map((epic) => [epic.key, epic]));
+}
+
+function epicAssigneeOf(card: Card, byKey: Map<string, Epic>): string {
+  return (card.epic ? byKey.get(card.epic)?.assignee : undefined) ?? "Unassigned";
+}
+
+function cardValues(card: Card, field: string, byKey: Map<string, Epic>): string[] {
+  if (field === "assignee") return [card.assignee ?? "Unassigned"];
+  if (field === "epicAssignee") return [epicAssigneeOf(card, byKey)];
+  if (field === "priority") return card.priority ? [card.priority] : [];
+  if (field === "labels") return card.labels ?? [];
+  return [];
 }
 
 function hasFilter(filter?: BoardFilter) {
   return Boolean(filter && Object.values(filter).some((values) => values.length > 0));
 }
 
-function cardMatchesFilter(card: Card, filter?: BoardFilter) {
+function cardMatchesFilter(card: Card, filter?: BoardFilter, epics?: Epic[]) {
   if (!hasFilter(filter)) return true;
+  const byKey = epicByKey(epics);
   return Object.entries(filter!).every(
-    ([field, selected]) => !selected.length || selected.includes(cardField(card, field)),
+    ([field, selected]) =>
+      !selected.length || cardValues(card, field, byKey).some((value) => selected.includes(value)),
   );
 }
 
@@ -102,7 +116,22 @@ function uniqueSorted(values: string[], compare: (a: string, b: string) => numbe
   return [...new Set(values)].sort(compare);
 }
 
-export function filterFacets(cards: Card[]): FilterFacet[] {
+function peopleFacet(
+  key: string,
+  label: string,
+  assigned: string[],
+  unassigned: boolean,
+): FilterFacet | undefined {
+  if (!assigned.length) return undefined;
+  return {
+    key,
+    label,
+    group: "Assignee",
+    values: [...uniqueSorted(assigned, (a, b) => a.localeCompare(b)), ...(unassigned ? ["Unassigned"] : [])],
+  };
+}
+
+export function filterFacets(cards: Card[], epics: Epic[] = []): FilterFacet[] {
   const facets: FilterFacet[] = [];
   const priorities = cards
     .map((card) => card.priority)
@@ -111,32 +140,55 @@ export function filterFacets(cards: Card[]): FilterFacet[] {
     facets.push({
       key: "priority",
       label: "Priority",
+      group: "Priority",
       values: uniqueSorted(
         priorities,
         (a, b) => priorityRank(a) - priorityRank(b) || a.localeCompare(b),
       ),
     });
   }
+  const byKey = epicByKey(epics);
+  const epicAssigned = cards
+    .map((card) => (card.epic ? byKey.get(card.epic)?.assignee : undefined))
+    .filter((value): value is string => Boolean(value));
+  const epicFacet = peopleFacet(
+    "epicAssignee",
+    "Epic",
+    epicAssigned,
+    cards.some((card) => !byKey.get(card.epic ?? "")?.assignee),
+  );
+  if (epicFacet) facets.push(epicFacet);
   const assignees = cards
     .map((card) => card.assignee)
     .filter((value): value is string => Boolean(value));
-  const unassigned = cards.some((card) => !card.assignee);
-  if (assignees.length) {
+  const storyFacet = peopleFacet(
+    "assignee",
+    "Stories",
+    assignees,
+    cards.some((card) => !card.assignee),
+  );
+  if (storyFacet) facets.push(storyFacet);
+  const labels = cards.flatMap((card) => card.labels ?? []);
+  if (labels.length) {
     facets.push({
-      key: "assignee",
-      label: "Assignee",
-      values: [
-        ...uniqueSorted(assignees, (a, b) => a.localeCompare(b)),
-        ...(unassigned ? ["Unassigned"] : []),
-      ],
+      key: "labels",
+      label: "Labels",
+      group: "Labels",
+      values: uniqueSorted(labels, (a, b) => a.localeCompare(b)),
     });
   }
   return facets;
 }
 
-function omitted(card: Card, epic: string | null, query: string, filter?: BoardFilter) {
+function omitted(
+  card: Card,
+  epic: string | null,
+  query: string,
+  filter?: BoardFilter,
+  epics?: Epic[],
+) {
   if (epic && !ofEpic(card, epic)) return true;
-  return !cardMatches(card, query) || !cardMatchesFilter(card, filter);
+  return !cardMatches(card, query) || !cardMatchesFilter(card, filter, epics);
 }
 
 function parseTime(value?: string) {
@@ -186,7 +238,7 @@ export function filterValue(
       .map(([title, cards]) => [
         title,
         sortCards(
-          cards.filter((card) => !omitted(card, epic, query, opts?.filter)),
+          cards.filter((card) => !omitted(card, epic, query, opts?.filter, opts?.epics)),
           opts?.sort,
         ),
       ]),
@@ -246,7 +298,7 @@ export function mergeValue(
       title,
       hide.includes(title)
         ? cards
-        : cards.filter((card) => omitted(card, epic, query, opts?.filter)),
+        : cards.filter((card) => omitted(card, epic, query, opts?.filter, opts?.epics)),
     ]),
   );
   const titles = new Set([...Object.keys(hiddenCards), ...Object.keys(next)]);
