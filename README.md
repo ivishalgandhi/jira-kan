@@ -1,27 +1,27 @@
-# jira-kan
+# pipe-kan
 
 Local Kanban for [jira-cli](https://github.com/ankitpokhrel/jira-cli). The first release changes Jira only by running jira-cli.
 
 ## Run
 
 ```sh
-bunx jira-kan
+bunx pipe-kan
 # or
-npx jira-kan
+npx pipe-kan
 ```
 
 Opens `http://127.0.0.1:5173`. No clone, no `bun install`. `bunx` / `npx` installs the published package into a cache and runs it.
 
 First paint is the Fixture. If `jira` is on PATH, the process then Refresh-es from your existing `jira init`. If not, Refresh and Move use the in-process store.
 
-Until npm has a release, from a clone: `bun run build && bun dist/jira-kan.js`.
+Until npm has a release, from a clone: `bun run build && bun dist/pipe-kan.js`.
 
 - Left: Epics. Center: Cards (one Column per status in the payload). Right: Open URL; remote Jira is a link, not an iframe.
 - Drop a Card on a Column to Move (`jira issue move`).
 - Same-Column drop and column reorder do nothing.
 - Theme is stored in `localStorage`.
 
-LAN: `HOST=0.0.0.0 bunx jira-kan`.
+LAN: `HOST=0.0.0.0 bunx pipe-kan`.
 
 ## Work Jira
 
@@ -29,7 +29,7 @@ Use your existing `jira init` config. Do not set `JIRA_CONFIG_FILE` to the Fixtu
 
 ```sh
 export JIRA_API_TOKEN=...   # only if jira-cli does not already have it
-bunx jira-kan
+bunx pipe-kan
 ```
 
 Scope flags start empty. Add `-a you@work.com` or `-s~Done` if you want a tighter list, then Refresh.
@@ -37,7 +37,7 @@ Scope flags start empty. Add `-a you@work.com` or `-s~Done` if you want a tighte
 ## Fake Jira
 
 ```sh
-JIRA_CONFIG_FILE=/tmp/jira-kan/jira.config.yml JIRA_API_TOKEN=fake bunx jira-kan
+JIRA_CONFIG_FILE=/tmp/pipe-kan/jira.config.yml JIRA_API_TOKEN=fake bunx pipe-kan
 ```
 
 Boot writes that Fake Jira config (path is also printed) and points it at this origin.
@@ -45,7 +45,7 @@ Boot writes that Fake Jira config (path is also printed) and points it at this o
 ## Pipe
 
 ```sh
-jira issue list --raw | bunx jira-kan
+jira issue list --raw | bunx pipe-kan
 ```
 
 Pipe is the first Board. Refresh and Move still go through `jira` when it is on PATH.
@@ -74,7 +74,7 @@ bun run typecheck
 bun run build
 ```
 
-Contributors still `bun install` and `bun run dev` (Vite). `bun run build` writes the published CLI to `dist/jira-kan.js`.
+Contributors still `bun install` and `bun run dev` (Vite). `bun run build` writes the published CLI to `dist/pipe-kan.js`.
 
 ## Version
 

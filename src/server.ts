@@ -38,14 +38,14 @@ export async function runServer(opts: {
     }
     if (!sendUi(opts.root, req, res)) {
       res.statusCode = 404;
-      res.end("jira-kan UI is missing. Run bun run build.");
+      res.end("pipe-kan UI is missing. Run bun run build.");
     }
   });
 
   const { host, port } = resolveListen();
   await new Promise<void>((resolve) => server.listen(port, host, resolve));
   const origin = `http://127.0.0.1:${port}`;
-  const fakeConfig = writeJiraConfig(join(tmpdir(), "jira-kan"), origin);
+  const fakeConfig = writeJiraConfig(join(tmpdir(), "pipe-kan"), origin);
 
   if (kind === "jira") {
     try {
@@ -56,7 +56,7 @@ export async function runServer(opts: {
     }
   }
 
-  console.log(`jira-kan http://${host}:${port}`);
+  console.log(`pipe-kan http://${host}:${port}`);
   console.log(`cli ${kind === "jira" ? resolveJiraBin() : "store"}`);
   console.log(`Fake Jira ${origin}/rest/api/2/search`);
   console.log(`Fake Jira config ${fakeConfig}`);

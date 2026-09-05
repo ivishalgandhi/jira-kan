@@ -2,7 +2,7 @@
 
 ### Issue tracker
 
-Issues live in GitHub Issues for `ivishalgandhi/jira-kan`. See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues for `ivishalgandhi/pipe-kan`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

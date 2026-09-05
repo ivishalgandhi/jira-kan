@@ -1,4 +1,4 @@
-# jira-kan
+# pipe-kan
 
 A local Kanban view of Jira issues, fed by jira-cli. The first release changes Jira only by running jira-cli.
 

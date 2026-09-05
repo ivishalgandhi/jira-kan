@@ -27,7 +27,7 @@ async function listen(root: string) {
 }
 
 function fakeUi() {
-  const root = mkdtempSync(join(tmpdir(), "jira-kan-ui-"));
+  const root = mkdtempSync(join(tmpdir(), "pipe-kan-ui-"));
   mkdirSync(uiDir(root), { recursive: true });
   writeFileSync(join(uiDir(root), "index.html"), "<html>board</html>");
   writeFileSync(join(uiDir(root), "app.js"), "ok");
@@ -35,7 +35,7 @@ function fakeUi() {
 }
 
 test("package root is the install directory", () => {
-  expect(packageRoot()).toMatch(/jira-kan$/);
+  expect(packageRoot()).toMatch(/pipe-kan$/);
 });
 
 test("built Board is served from dist/ui", async () => {
@@ -53,7 +53,7 @@ test("unknown paths fall back to the Board", async () => {
 });
 
 test("UI is missing until build", async () => {
-  const base = await listen(mkdtempSync(join(tmpdir(), "jira-kan-empty-")));
+  const base = await listen(mkdtempSync(join(tmpdir(), "pipe-kan-empty-")));
   const res = await fetch(base + "/");
   expect(res.status).toBe(404);
 });

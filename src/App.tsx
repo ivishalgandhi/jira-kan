@@ -507,7 +507,7 @@ export function App() {
   return (
     <div className="bg-muted/40 flex h-screen flex-col">
       <header className="bg-background flex flex-wrap items-center gap-2 border-b px-6 py-3">
-        <strong className="mr-2 text-sm">jira-kan</strong>
+        <strong className="mr-2 text-sm">pipe-kan</strong>
         <InputGroup className="min-w-48 flex-1">
           <InputGroupInput
             value={search}

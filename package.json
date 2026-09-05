@@ -1,11 +1,11 @@
 {
-  "name": "jira-kan",
+  "name": "pipe-kan",
   "version": "0.7.0",
   "description": "Local Kanban for jira-cli",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "jira-kan": "dist/jira-kan.js"
+    "pipe-kan": "dist/pipe-kan.js"
   },
   "files": [
     "dist",
@@ -13,7 +13,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ivishalgandhi/jira-kan.git"
+    "url": "git+https://github.com/ivishalgandhi/pipe-kan.git"
   },
   "publishConfig": {
     "access": "public"
@@ -21,7 +21,7 @@
   "scripts": {
     "dev": "bun src/start.ts",
     "start": "bun src/bin.ts",
-    "build": "vite build && bun build src/bin.ts --outfile dist/jira-kan.js --target node --banner '#!/usr/bin/env node'",
+    "build": "vite build && bun build src/bin.ts --outfile dist/pipe-kan.js --target node --banner '#!/usr/bin/env node'",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

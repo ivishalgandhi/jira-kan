@@ -3,7 +3,7 @@
     "key": "DEMO-1",
     "fields": {
       "summary": "Ship a local kanban",
-      "description": "Epic for the first jira-kan release.",
+      "description": "Epic for the first pipe-kan release.",
       "labels": [
         "kanban"
       ],

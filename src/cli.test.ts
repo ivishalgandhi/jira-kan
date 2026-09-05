@@ -16,7 +16,7 @@ const fixture = JSON.parse(
 ) as RawIssue[];
 
 function fakeJira() {
-  const dir = mkdtempSync(join(tmpdir(), "jira-kan-"));
+  const dir = mkdtempSync(join(tmpdir(), "pipe-kan-"));
   const bin = join(dir, "jira");
   const log = join(dir, "calls.jsonl");
   writeFileSync(
