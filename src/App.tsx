@@ -1230,8 +1230,6 @@ export function App() {
                 onRenamePreset={renameNamedPreset}
                 onDeletePreset={(name) => persistPresets(removePreset(presets, name))}
               />
-              {boardKind === "stories" ? (
-              <>
               <div className="text-muted-foreground px-3 pt-3 pb-1 text-[11px] font-medium">
                 Epics
               </div>
@@ -1267,8 +1265,6 @@ export function App() {
                   ))
                 ),
               )}
-              </>
-              ) : null}
             </nav>
           </aside>
         </ResizablePanel>
