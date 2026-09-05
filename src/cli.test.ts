@@ -47,6 +47,13 @@ if (cmd === "issue" && sub === "move") {
   }
   process.exit(0);
 }
+if (cmd === "issue" && sub === "view") {
+  console.log(JSON.stringify({
+    key,
+    fields: { summary: "from jira", status: { name: "To Do" }, description: "viewed" },
+  }));
+  process.exit(0);
+}
 if (cmd === "open") {
   console.log("opening...");
   console.log("http://127.0.0.1:5173/browse/" + sub);
@@ -164,10 +171,12 @@ test("createJiraCli move and open shell jira-cli", async () => {
     error: '✗ invalid transition state "Done"',
   });
   expect(await cli.open("DEMO-1")).toBe("http://127.0.0.1:5173/browse/DEMO-1");
+  expect(JSON.parse(await cli.view("DEMO-1")).fields.description).toBe("viewed");
   expect(calls().map((call) => call.args)).toEqual([
     ["issue", "move", "DEMO-3", "Done"],
     ["issue", "move", "DEMO-4", "Done"],
     ["open", "DEMO-1", "--no-browser"],
+    ["issue", "view", "DEMO-1", "--raw"],
   ]);
 });
 

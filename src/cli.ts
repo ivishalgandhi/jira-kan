@@ -11,6 +11,7 @@ export type Cli = {
   listEpic(key: string): Promise<string>;
   move(key: string, status: string): Promise<{ ok: boolean; error?: string }>;
   open(key: string): Promise<string>;
+  view(key: string): Promise<string>;
 };
 
 function emptyList(text: string) {
@@ -36,6 +37,11 @@ export function createStoreCli(store: IssueStore): Cli {
     },
     async open(key) {
       return `/browse/${key}`;
+    },
+    async view(key) {
+      const issue = store.get(key);
+      if (!issue) throw new Error(`Issue ${key} not found`);
+      return JSON.stringify(issue);
     },
   };
 }
@@ -137,6 +143,13 @@ export function createJiraCli(
     async open(key) {
       const result = await run(["open", key, "--no-browser"]);
       return result.stdout.trim().split("\n").pop() ?? `/browse/${key}`;
+    },
+    async view(key) {
+      const result = await run(["issue", "view", key, "--raw"]);
+      if (result.code !== 0) {
+        throw new Error((result.stderr || result.stdout || "jira issue view failed").trim());
+      }
+      return result.stdout;
     },
   };
 }

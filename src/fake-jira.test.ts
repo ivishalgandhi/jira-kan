@@ -90,3 +90,14 @@ test("In Progress can Move to Done", async () => {
   expect(move.status).toBe(204);
   expect(store.get("DEMO-3")?.fields.status.name).toBe("Done");
 });
+
+test("Fake Jira view returns the stored Issue", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const base = await listen(store);
+  const res = await fetch(`${base}/rest/api/2/issue/DEMO-2`);
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.key).toBe("DEMO-2");
+  expect(body.fields.summary).toBe("Parse jira-cli --raw JSON");
+  expect(body.fields.description).toBe("Turn the payload into Columns.");
+});

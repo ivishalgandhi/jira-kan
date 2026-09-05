@@ -118,15 +118,46 @@ test("Refresh with Epic flag lists Epic children", async () => {
   ]);
 });
 
-test("Open returns the browse URL", async () => {
+test("Open returns the browse URL and flattened fields", async () => {
   const { base } = await listen();
   const res = await fetch(`${base}/api/open`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ key: "DEMO-1" }),
+    body: JSON.stringify({ key: "DEMO-2" }),
   });
   const body = await res.json();
-  expect(body.url).toBe("/browse/DEMO-1");
+  expect(body.url).toBe("/browse/DEMO-2");
+  expect(body.fields[0]).toEqual({ label: "Key", value: "DEMO-2" });
+  expect(body.fields.find((field: { label: string }) => field.label === "Summary")?.value).toBe(
+    "Parse jira-cli --raw JSON",
+  );
+  expect(body.fields.find((field: { label: string }) => field.label === "Description")?.value).toBe(
+    "Turn the payload into Columns.",
+  );
+  expect(body.fields.some((field: { label: string }) => /comment/i.test(field.label))).toBe(false);
+});
+
+test("Open keeps the URL and an error when view fails", async () => {
+  const store = IssueStore.fromRaw(fixture);
+  const { base } = await listen(store, {
+    list: async () => JSON.stringify(fixture),
+    listEpics: async () => "[]",
+    listEpic: async () => "[]",
+    move: async () => ({ ok: true }),
+    open: async (key) => `/browse/${key}`,
+    view: async () => {
+      throw new Error("jira issue view failed");
+    },
+  });
+  const res = await fetch(`${base}/api/open`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key: "DEMO-2" }),
+  });
+  const body = await res.json();
+  expect(body.url).toBe("/browse/DEMO-2");
+  expect(body.fields).toEqual([]);
+  expect(body.error).toBe("jira issue view failed");
 });
 
 test("Epic children keep the Epic key", async () => {
@@ -191,6 +222,9 @@ test("Board.epics come from the Epic list, not only Scope", async () => {
     },
     async open() {
       return "/browse/X";
+    },
+    async view() {
+      return JSON.stringify({ key: "X", fields: {} });
     },
   };
   const { base } = await listen(IssueStore.fromRaw(fixture), cli);

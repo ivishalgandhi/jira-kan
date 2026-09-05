@@ -1,6 +1,7 @@
 import { issuesToBoard, mergeEpics, type Board } from "./board.ts";
 import { createStoreCli, type Cli } from "./cli.ts";
 import { DEFAULT_FLAGS } from "./flags.ts";
+import { flattenIssue, type OpenField } from "./open.ts";
 import { IssueStore } from "./store.ts";
 
 export type App = {
@@ -13,7 +14,7 @@ export type App = {
     key: string,
     status: string,
   ): Promise<{ ok: boolean; noop?: boolean; error?: string; board: Board }>;
-  open(key: string): Promise<string>;
+  open(key: string): Promise<{ url: string; fields: OpenField[]; error?: string }>;
 };
 
 export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
@@ -71,7 +72,17 @@ export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
       return { ok: true, board: app.board() };
     },
     async open(key) {
-      return cli.open(key);
+      const urlP = cli.open(key);
+      try {
+        const [url, raw] = await Promise.all([urlP, cli.view(key)]);
+        return { url, fields: flattenIssue(JSON.parse(raw), url) };
+      } catch (err) {
+        return {
+          url: await urlP.catch(() => `/browse/${key}`),
+          fields: [],
+          error: err instanceof Error ? err.message : "jira issue view failed",
+        };
+      }
     },
   };
   return app;

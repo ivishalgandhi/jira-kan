@@ -36,7 +36,7 @@ export type RawIssue = {
     summary?: unknown;
     status?: { name?: unknown };
     priority?: { name?: unknown };
-    assignee?: { displayName?: unknown };
+    assignee?: unknown;
     duedate?: unknown;
     issuetype?: { name?: unknown };
     issueType?: { name?: unknown };
@@ -118,6 +118,20 @@ function issueStatus(fields: RawIssue["fields"]): string | undefined {
     : undefined;
 }
 
+function issueAssignee(fields: RawIssue["fields"]): string | undefined {
+  const raw = fields?.assignee;
+  if (typeof raw === "string" && raw.trim()) return raw.trim();
+  if (!raw || typeof raw !== "object") return undefined;
+  const assignee = raw as { displayName?: unknown; name?: unknown };
+  if (typeof assignee.displayName === "string" && assignee.displayName.trim()) {
+    return assignee.displayName.trim();
+  }
+  if (typeof assignee.name === "string" && assignee.name.trim()) {
+    return assignee.name.trim();
+  }
+  return undefined;
+}
+
 function toEpic(face: {
   key: string;
   summary: string;
@@ -143,10 +157,7 @@ function toCard(issue: RawIssue, key: string): Card {
     typeof issue.fields?.priority?.name === "string"
       ? issue.fields.priority.name
       : undefined;
-  const assignee =
-    typeof issue.fields?.assignee?.displayName === "string"
-      ? issue.fields.assignee.displayName
-      : undefined;
+  const assignee = issueAssignee(issue.fields);
   const dueDate = formatDueDate(issue.fields?.duedate);
   const type = issueType(issue.fields);
   const epic = epicKey(issue.fields);

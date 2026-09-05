@@ -63,8 +63,7 @@ export function handleAppApi(
   if (url.pathname === "/api/open" && method === "POST") {
     void readBody(req).then(async (text) => {
       const body = text ? JSON.parse(text) : {};
-      const url = await app.open(String(body.key ?? ""));
-      json(res, 200, { url });
+      json(res, 200, await app.open(String(body.key ?? "")));
     });
     return true;
   }

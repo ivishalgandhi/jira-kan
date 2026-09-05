@@ -78,6 +78,18 @@ export function handleFakeJira(
     }
   }
 
+  const issueGet = path.match(/^\/rest\/api\/[23]\/issue\/([^/]+)$/);
+  if (issueGet && method === "GET") {
+    const key = decodeURIComponent(issueGet[1]);
+    const issue = store.get(key);
+    if (!issue) {
+      json(res, 404, { errorMessages: [`Issue ${key} not found`] });
+      return true;
+    }
+    json(res, 200, issue);
+    return true;
+  }
+
   const browse = path.match(/^\/browse\/([^/]+)$/);
   if (browse && method === "GET") {
     const key = decodeURIComponent(browse[1]);

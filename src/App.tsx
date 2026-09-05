@@ -1,16 +1,39 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import {
+  ArrowUpDownIcon,
   ChevronDownIcon,
+  Columns3Icon,
+  EyeOffIcon,
   GripVerticalIcon,
+  ListFilterIcon,
   MoonIcon,
+  MoreHorizontalIcon,
   SearchIcon,
+  StarIcon,
   SunIcon,
   XIcon,
 } from "lucide-react";
 
 import { cardAge, type Board, type Card, type Column, type Epic } from "./board.ts";
-import { frameSrc } from "./open.ts";
-import { cardMatches, filterEpics, filterValue, groupEpics, mergeValue, rollbackColumns, stampEpic } from "./visible.ts";
+import { frameSrc, type OpenField } from "./open.ts";
+import {
+  addFolder,
+  cardMatches,
+  filterEpics,
+  filterValue,
+  groupEpics,
+  listedFavourites,
+  mergeValue,
+  moveFavourite,
+  removeFolder,
+  renameFolder,
+  rollbackColumns,
+  stampEpic,
+  toggleFavourite,
+  type BoardSort,
+  type FavouriteState,
+  type VisibleOpts,
+} from "./visible.ts";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
 import { Button } from "~/components/ui/button";
 import {
@@ -18,6 +41,17 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import {
   Kanban,
   KanbanBoard,
@@ -44,12 +78,28 @@ import { useDefaultLayout } from "react-resizable-panels";
 
 const COLLAPSED_KEY = "collapsed-columns";
 const COLLAPSED_EPIC_STATUS_KEY = "collapsed-epic-statuses";
+const COLLAPSED_FOLDER_KEY = "collapsed-favourite-folders";
+const CHROME_KEY = "board-chrome";
+const FAV_KEY = "favourite-epics";
 const DEFAULT_COLLAPSED_EPIC_STATUS = [
   "In Progress",
   "Completed",
   "Cancelled",
   "Canceled",
 ];
+
+type Chrome = {
+  filter: { priorities: string[]; assignees: string[] };
+  sort: BoardSort;
+  hide: string[];
+};
+
+const DEFAULT_CHROME: Chrome = {
+  filter: { priorities: [], assignees: [] },
+  sort: "payload",
+  hide: [],
+};
+const DEFAULT_FAVS: FavouriteState = { keys: [], folders: [] };
 
 function readCollapsed(key = COLLAPSED_KEY, fallback: string[] = []): Set<string> {
   try {
@@ -71,6 +121,88 @@ function writeCollapsed(next: Set<string>, key = COLLAPSED_KEY) {
 function hasStatus(collapsed: Set<string>, status: string) {
   const needle = status.toLowerCase();
   return [...collapsed].some((item) => item.toLowerCase() === needle);
+}
+
+function readChrome(): Chrome {
+  try {
+    const stored = localStorage.getItem(CHROME_KEY);
+    if (stored === null) return DEFAULT_CHROME;
+    const raw = JSON.parse(stored) as Partial<Chrome>;
+    return {
+      filter: {
+        priorities: Array.isArray(raw.filter?.priorities)
+          ? raw.filter.priorities.filter((item) => typeof item === "string")
+          : [],
+        assignees: Array.isArray(raw.filter?.assignees)
+          ? raw.filter.assignees.filter((item) => typeof item === "string")
+          : [],
+      },
+      sort:
+        raw.sort === "priority" || raw.sort === "age" || raw.sort === "due" || raw.sort === "key"
+          ? raw.sort
+          : "payload",
+      hide: Array.isArray(raw.hide) ? raw.hide.filter((item) => typeof item === "string") : [],
+    };
+  } catch {
+    return DEFAULT_CHROME;
+  }
+}
+
+function writeChrome(next: Chrome) {
+  localStorage.setItem(CHROME_KEY, JSON.stringify(next));
+}
+
+function readFavourites(): FavouriteState {
+  try {
+    const stored = localStorage.getItem(FAV_KEY);
+    if (stored === null) return DEFAULT_FAVS;
+    const raw = JSON.parse(stored) as unknown;
+    if (Array.isArray(raw) && raw.every((item) => typeof item === "string")) {
+      return { keys: raw, folders: [] };
+    }
+    if (raw && typeof raw === "object") {
+      const value = raw as { keys?: unknown; folders?: unknown };
+      const keys = Array.isArray(value.keys)
+        ? value.keys.filter((item): item is string => typeof item === "string")
+        : [];
+      const folders = Array.isArray(value.folders)
+        ? value.folders.flatMap((folder) => {
+            if (!folder || typeof folder !== "object") return [];
+            const item = folder as { name?: unknown; keys?: unknown };
+            if (typeof item.name !== "string" || !item.name.trim()) return [];
+            return [{
+              name: item.name,
+              keys: Array.isArray(item.keys)
+                ? item.keys.filter((key): key is string => typeof key === "string")
+                : [],
+            }];
+          })
+        : [];
+      return { keys, folders };
+    }
+    return DEFAULT_FAVS;
+  } catch {
+    return DEFAULT_FAVS;
+  }
+}
+
+function writeFavourites(next: FavouriteState) {
+  localStorage.setItem(FAV_KEY, JSON.stringify(next));
+}
+
+function fieldsFromCard(card: Card, url?: string | null): OpenField[] {
+  const rows: OpenField[] = [
+    { label: "Key", value: card.key },
+    { label: "Summary", value: card.summary },
+  ];
+  if (url) rows.push({ label: "Jira URL", value: url });
+  if (card.priority) rows.push({ label: "Priority", value: card.priority });
+  if (card.assignee) rows.push({ label: "Assignee", value: card.assignee });
+  if (card.dueDate) rows.push({ label: "Due date", value: card.dueDate });
+  if (card.labels?.length) {
+    rows.push({ label: "Labels", value: card.labels.join(", "), pills: card.labels });
+  }
+  return rows;
 }
 
 type BoardPayload = Board & { flags?: string };
@@ -127,6 +259,10 @@ function priorityClass(priority?: string) {
   }
   if (value === "medium") return "text-orange-400";
   return "text-yellow-500";
+}
+
+function toggleList(values: string[], item: string) {
+  return values.includes(item) ? values.filter((value) => value !== item) : [...values, item];
 }
 
 function IssueCard({
@@ -209,12 +345,14 @@ function StatusColumn({
   isOverlay,
   disabled,
   onOpen,
+  onHide,
 }: {
   title: string;
   cards: Card[];
   isOverlay?: boolean;
   disabled?: boolean;
   onOpen?: (key: string) => void;
+  onHide?: () => void;
 }) {
   const [open, setOpen] = useState(
     () => isOverlay || !readCollapsed().has(title),
@@ -257,6 +395,17 @@ function StatusColumn({
                 />
               </button>
             </CollapsibleTrigger>
+            {onHide ? (
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                type="button"
+                aria-label={`Hide ${title}`}
+                onClick={onHide}
+              >
+                <EyeOffIcon />
+              </Button>
+            ) : null}
             <KanbanColumnHandle className="opacity-0 transition-opacity group-hover:opacity-60">
               <Button size="icon-xs" variant="ghost" tabIndex={-1} type="button">
                 <GripVerticalIcon />
@@ -290,36 +439,77 @@ function EpicButton({
   epic,
   selected,
   count,
+  favourited,
+  folders,
   onSelect,
+  onToggleFavourite,
+  onFile,
 }: {
   epic: Epic;
   selected: boolean;
   count: number;
+  favourited: boolean;
+  folders?: string[];
   onSelect: (key: string | null) => void;
+  onToggleFavourite: (key: string) => void;
+  onFile?: (key: string, folder: string | null) => void;
 }) {
   return (
-    <button
-      type="button"
+    <div
       className={cn(
-        "flex h-14 w-full items-center gap-3 rounded-lg px-3 text-left",
+        "flex h-14 w-full items-center gap-1 rounded-lg pr-1",
         selected
           ? "bg-sidebar-accent text-sidebar-accent-foreground"
           : "hover:bg-foreground/5",
       )}
-      onClick={() => void onSelect(epic.key)}
     >
-      <span
-        className="size-2 shrink-0 rounded-full"
-        style={{ backgroundColor: statusCircle(epic.status) }}
-      />
-      <span className="min-w-0 flex-1 truncate text-[13px] leading-[18px]">
-        {epic.summary}
-      </span>
-      <span className="text-muted-foreground text-[11px] font-medium tabular-nums">
-        {epic.key}
-      </span>
-      <span className="text-muted-foreground text-[11px] tabular-nums">{count}</span>
-    </button>
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-3 px-3 text-left"
+        onClick={() => void onSelect(epic.key)}
+      >
+        <span
+          className="size-2 shrink-0 rounded-full"
+          style={{ backgroundColor: statusCircle(epic.status) }}
+        />
+        <span className="min-w-0 flex-1 truncate text-[13px] leading-[18px]">
+          {epic.summary}
+        </span>
+        <span className="text-muted-foreground text-[11px] font-medium tabular-nums">
+          {epic.key}
+        </span>
+        <span className="text-muted-foreground text-[11px] tabular-nums">{count}</span>
+      </button>
+      {onFile && favourited ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon-xs" variant="ghost" type="button" aria-label={`Move ${epic.key}`}>
+              <MoreHorizontalIcon />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => onFile(epic.key, null)}>Unfiled</DropdownMenuItem>
+            {folders?.map((folder) => (
+              <DropdownMenuItem key={folder} onClick={() => onFile(epic.key, folder)}>
+                {folder}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        type="button"
+        aria-label={favourited ? `Unfavourite ${epic.key}` : `Favourite ${epic.key}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggleFavourite(epic.key);
+        }}
+      >
+        <StarIcon className={cn(favourited && "fill-current")} />
+      </Button>
+    </div>
   );
 }
 
@@ -328,13 +518,17 @@ function EpicStatusGroup({
   epics,
   selectedEpic,
   childCount,
+  favourites,
   onSelect,
+  onToggleFavourite,
 }: {
   status: string;
   epics: Epic[];
   selectedEpic: string | null;
   childCount: (key: string) => number;
+  favourites: FavouriteState;
   onSelect: (key: string | null) => void;
+  onToggleFavourite: (key: string) => void;
 }) {
   const [open, setOpen] = useState(
     () => !hasStatus(readCollapsed(COLLAPSED_EPIC_STATUS_KEY, DEFAULT_COLLAPSED_EPIC_STATUS), status),
@@ -377,11 +571,50 @@ function EpicStatusGroup({
             epic={epic}
             selected={selectedEpic === epic.key}
             count={childCount(epic.key)}
+            favourited={favourites.keys.includes(epic.key)}
             onSelect={onSelect}
+            onToggleFavourite={onToggleFavourite}
           />
         ))}
       </CollapsibleContent>
     </Collapsible>
+  );
+}
+
+function OpenFields({ fields }: { fields: OpenField[] }) {
+  return (
+    <dl className="flex flex-col gap-3 p-4 text-[13px]">
+      {fields.map((field) => (
+        <div key={field.label} className="flex flex-col gap-1">
+          <dt className="text-muted-foreground text-[11px] font-medium">{field.label}</dt>
+          <dd className="whitespace-pre-wrap">
+            {field.label === "Jira URL" ? (
+              <a
+                className="text-foreground font-medium underline-offset-4 hover:underline"
+                href={field.value}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {field.value}
+              </a>
+            ) : field.pills?.length ? (
+              <span className="flex flex-wrap gap-1">
+                {field.pills.map((pill) => (
+                  <span
+                    key={pill}
+                    className="text-muted-foreground inline-flex h-6 items-center rounded-full border px-2 text-[12px]"
+                  >
+                    {pill}
+                  </span>
+                ))}
+              </span>
+            ) : (
+              field.value
+            )}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -391,23 +624,35 @@ export function App() {
   const [selectedEpic, setSelectedEpic] = useState<string | null>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [openUrl, setOpenUrl] = useState<string | null>(null);
+  const [openFields, setOpenFields] = useState<OpenField[]>([]);
+  const [openError, setOpenError] = useState("");
   const [flags, setFlags] = useState("");
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [theme, setTheme] = useState<Theme>(readTheme);
+  const [chrome, setChrome] = useState<Chrome>(readChrome);
+  const [favourites, setFavourites] = useState<FavouriteState>(readFavourites);
+  const [folderName, setFolderName] = useState("");
+  const [folderError, setFolderError] = useState("");
 
+  const visibleOpts: VisibleOpts = chrome;
   const visible = useMemo(
-    () => filterValue(columns, selectedEpic, search),
-    [columns, selectedEpic, search],
+    () => filterValue(columns, selectedEpic, search, visibleOpts),
+    [columns, selectedEpic, search, chrome],
   );
+  const allCards = useMemo(() => Object.values(columns).flat(), [columns]);
   const visibleEpics = useMemo(
-    () => filterEpics(epics, Object.values(columns).flat(), search),
-    [epics, columns, search],
+    () => filterEpics(epics, allCards, search),
+    [epics, allCards, search],
   );
   const epicGroups = useMemo(() => groupEpics(visibleEpics), [visibleEpics]);
+  const favouritePane = useMemo(
+    () => listedFavourites(epics, favourites, search, allCards),
+    [epics, favourites, search, allCards],
+  );
   const columnIds = Object.keys(visible);
-  const boardOpenIds = openUrl ? ["cards", "open"] : ["cards"];
+  const boardOpenIds = openKey ? ["cards", "open"] : ["cards"];
   const shellLayout = useDefaultLayout({
     id: "shell",
     panelIds: ["epics", "board"],
@@ -426,6 +671,24 @@ export function App() {
   const embed = openUrl
     ? frameSrc(openUrl, window.location.origin)
     : null;
+  const priorityOptions = [...new Set(allCards.map((card) => card.priority).filter((item): item is string => Boolean(item)))].sort();
+  const assigneeOptions = [
+    ...new Set(allCards.map((card) => card.assignee).filter((item): item is string => Boolean(item))),
+    ...(allCards.some((card) => !card.assignee) ? ["Unassigned"] : []),
+  ];
+  const memoryStatuses = Object.keys(columns);
+  const showFavourites =
+    favouritePane.unfiled.length > 0 || favouritePane.folders.length > 0;
+
+  function persistChrome(next: Chrome) {
+    setChrome(next);
+    writeChrome(next);
+  }
+
+  function persistFavourites(next: FavouriteState) {
+    setFavourites(next);
+    writeFavourites(next);
+  }
 
   function applyBoard(next: Board) {
     setColumns(toValue(next.columns));
@@ -483,17 +746,34 @@ export function App() {
   }
 
   async function open(key: string) {
-    const data = await api<{ url: string }>("/api/open", {
+    const card = allCards.find((item) => item.key === key);
+    const immediateUrl = `/browse/${key}`;
+    setOpenKey(key);
+    setOpenUrl(immediateUrl);
+    setOpenError("");
+    setOpenFields(card ? fieldsFromCard(card, immediateUrl) : [{ label: "Jira URL", value: immediateUrl }]);
+    const data = await api<{ url: string; fields: OpenField[]; error?: string }>("/api/open", {
       method: "POST",
       body: JSON.stringify({ key }),
     });
-    setOpenKey(key);
     setOpenUrl(data.url);
+    if (data.error) {
+      setOpenError(data.error);
+      setOpenFields(card ? fieldsFromCard(card, data.url) : [{ label: "Jira URL", value: data.url }]);
+      return;
+    }
+    setOpenFields(data.fields);
   }
 
   function commit(_next: Record<string, Card[]>, meta: KanbanCommitMeta<Card>) {
-    if (meta.kind === "column" || meta.activeContainer === meta.overContainer) {
-      setColumns((current) => rollbackColumns(meta.previousValue, current, selectedEpic, search));
+    if (
+      meta.kind === "column" ||
+      meta.activeContainer === meta.overContainer ||
+      chrome.hide.includes(meta.overContainer)
+    ) {
+      setColumns((current) =>
+        rollbackColumns(meta.previousValue, current, selectedEpic, search, visibleOpts),
+      );
       return;
     }
     void move(String(meta.event.active.id), meta.overContainer);
@@ -506,9 +786,7 @@ export function App() {
   }
 
   function childCount(key: string) {
-    return Object.values(columns)
-      .flat()
-      .filter((card) => card.epic === key && cardMatches(card, search)).length;
+    return allCards.filter((card) => card.epic === key && cardMatches(card, search)).length;
   }
 
   async function selectEpic(key: string | null) {
@@ -528,6 +806,17 @@ export function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function createFolder() {
+    const result = addFolder(favourites, folderName);
+    if (!result.ok) {
+      setFolderError("Folder names must be unique");
+      return;
+    }
+    setFolderName("");
+    setFolderError("");
+    persistFavourites(result.state);
   }
 
   return (
@@ -566,6 +855,31 @@ export function App() {
               >
                 All stories
               </button>
+              {showFavourites ? (
+                <FavouriteGroup
+                  pane={favouritePane}
+                  selectedEpic={selectedEpic}
+                  childCount={childCount}
+                  favourites={favourites}
+                  folderName={folderName}
+                  folderError={folderError}
+                  onFolderName={setFolderName}
+                  onCreateFolder={createFolder}
+                  onRenameFolder={(from, to) => {
+                    const result = renameFolder(favourites, from, to);
+                    if (!result.ok) {
+                      setFolderError("Folder names must be unique");
+                      return;
+                    }
+                    setFolderError("");
+                    persistFavourites(result.state);
+                  }}
+                  onDeleteFolder={(name) => persistFavourites(removeFolder(favourites, name))}
+                  onSelect={selectEpic}
+                  onToggleFavourite={(key) => persistFavourites(toggleFavourite(favourites, key))}
+                  onFile={(key, folder) => persistFavourites(moveFavourite(favourites, key, folder))}
+                />
+              ) : null}
               <div className="text-muted-foreground px-3 pt-3 pb-1 text-[11px] font-medium">
                 Epics
               </div>
@@ -577,7 +891,9 @@ export function App() {
                     epics={group.epics}
                     selectedEpic={selectedEpic}
                     childCount={childCount}
+                    favourites={favourites}
                     onSelect={selectEpic}
+                    onToggleFavourite={(key) => persistFavourites(toggleFavourite(favourites, key))}
                   />
                 ) : (
                   group.epics.map((epic) => (
@@ -586,7 +902,9 @@ export function App() {
                       epic={epic}
                       selected={selectedEpic === epic.key}
                       count={childCount(epic.key)}
+                      favourited={favourites.keys.includes(epic.key)}
                       onSelect={selectEpic}
+                      onToggleFavourite={(key) => persistFavourites(toggleFavourite(favourites, key))}
                     />
                   ))
                 ),
@@ -630,6 +948,105 @@ export function App() {
                   spellCheck={false}
                   aria-label="Scope flags"
                 />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      <ListFilterIcon />
+                      Filter
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel>Priority</DropdownMenuLabel>
+                    {priorityOptions.map((priority) => (
+                      <DropdownMenuCheckboxItem
+                        key={priority}
+                        checked={chrome.filter.priorities.includes(priority)}
+                        onCheckedChange={() =>
+                          persistChrome({
+                            ...chrome,
+                            filter: {
+                              ...chrome.filter,
+                              priorities: toggleList(chrome.filter.priorities, priority),
+                            },
+                          })
+                        }
+                      >
+                        {priority}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Assignee</DropdownMenuLabel>
+                    {assigneeOptions.map((assignee) => (
+                      <DropdownMenuCheckboxItem
+                        key={assignee}
+                        checked={chrome.filter.assignees.includes(assignee)}
+                        onCheckedChange={() =>
+                          persistChrome({
+                            ...chrome,
+                            filter: {
+                              ...chrome.filter,
+                              assignees: toggleList(chrome.filter.assignees, assignee),
+                            },
+                          })
+                        }
+                      >
+                        {assignee}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => persistChrome(DEFAULT_CHROME)}>
+                      Clear Filter, Sort, and Hide
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      <ArrowUpDownIcon />
+                      Sort
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuRadioGroup
+                      value={chrome.sort}
+                      onValueChange={(value) =>
+                        persistChrome({ ...chrome, sort: value as BoardSort })
+                      }
+                    >
+                      <DropdownMenuRadioItem value="payload">Payload order</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="priority">Priority</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="age">Age</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="due">Due date</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="key">Key</DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      <Columns3Icon />
+                      Columns
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {memoryStatuses.map((status) => (
+                      <DropdownMenuCheckboxItem
+                        key={status}
+                        checked={!chrome.hide.includes(status)}
+                        onCheckedChange={(checked) =>
+                          persistChrome({
+                            ...chrome,
+                            hide: checked
+                              ? chrome.hide.filter((item) => item !== status)
+                              : [...chrome.hide, status],
+                          })
+                        }
+                      >
+                        {status}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button variant="ghost" size="sm" onClick={() => void refresh()} disabled={busy}>
                   Refresh
                 </Button>
@@ -656,7 +1073,7 @@ export function App() {
               >
                 <ResizablePanel
                   id="cards"
-                  defaultSize={openUrl ? "70%" : "100%"}
+                  defaultSize={openKey ? "70%" : "100%"}
                   minSize="16rem"
                   className="min-h-0"
                 >
@@ -665,7 +1082,9 @@ export function App() {
                       className="h-full min-h-0"
                       value={visible}
                       onValueChange={(next) =>
-                        setColumns((previous) => mergeValue(next, previous, selectedEpic, search))
+                        setColumns((previous) =>
+                          mergeValue(next, previous, selectedEpic, search, visibleOpts),
+                        )
                       }
                       getItemValue={(card) => card.key}
                       restoreOnCancel
@@ -694,6 +1113,9 @@ export function App() {
                                   cards={cards}
                                   disabled={busy}
                                   onOpen={(key) => void open(key)}
+                                  onHide={() =>
+                                    persistChrome({ ...chrome, hide: [...chrome.hide, title] })
+                                  }
                                 />
                               </ResizablePanel>
                             </Fragment>
@@ -722,7 +1144,7 @@ export function App() {
                     </Kanban>
                   </main>
                 </ResizablePanel>
-                {openUrl ? (
+                {openKey ? (
                   <>
                     <ResizableHandle />
                     <ResizablePanel
@@ -735,11 +1157,11 @@ export function App() {
                         <div className="flex h-10 items-center gap-2 px-3">
                           <a
                             className="min-w-0 flex-1 truncate text-[13px] font-medium underline-offset-4 hover:underline"
-                            href={openUrl}
+                            href={openUrl ?? undefined}
                             target="_blank"
                             rel="noreferrer"
                           >
-                            {openKey ?? openUrl}
+                            {openKey}
                           </a>
                           <Button
                             variant="ghost"
@@ -748,30 +1170,32 @@ export function App() {
                             onClick={() => {
                               setOpenKey(null);
                               setOpenUrl(null);
+                              setOpenFields([]);
+                              setOpenError("");
                             }}
                           >
                             <XIcon />
                           </Button>
                         </div>
-                        {embed ? (
-                          <iframe
-                            title={openKey ?? "Issue"}
-                            src={embed}
-                            className="min-h-0 w-full flex-1 border-0 bg-background"
-                          />
-                        ) : (
-                          <div className="text-muted-foreground flex flex-1 flex-col items-start gap-3 p-6 text-[13px]">
-                            <p>Jira refuses to embed this page.</p>
-                            <a
-                              className="text-foreground font-medium underline-offset-4 hover:underline"
-                              href={openUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              Open {openKey ?? "issue"} in Jira
-                            </a>
-                          </div>
-                        )}
+                        <div className="min-h-0 flex-1 overflow-auto">
+                          {openError ? (
+                            <p className="text-destructive px-4 pt-3 text-[13px] whitespace-pre-wrap">
+                              {openError}
+                            </p>
+                          ) : null}
+                          <OpenFields fields={openFields} />
+                          {embed ? (
+                            <iframe
+                              title={openKey ?? "Issue"}
+                              src={embed}
+                              className="min-h-64 w-full border-0 bg-background"
+                            />
+                          ) : openUrl ? (
+                            <div className="text-muted-foreground px-4 pb-6 text-[13px]">
+                              Jira refuses to embed this page.
+                            </div>
+                          ) : null}
+                        </div>
                       </aside>
                     </ResizablePanel>
                   </>
@@ -782,5 +1206,204 @@ export function App() {
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>
+  );
+}
+
+function FavouriteGroup({
+  pane,
+  selectedEpic,
+  childCount,
+  favourites,
+  folderName,
+  folderError,
+  onFolderName,
+  onCreateFolder,
+  onRenameFolder,
+  onDeleteFolder,
+  onSelect,
+  onToggleFavourite,
+  onFile,
+}: {
+  pane: ReturnType<typeof listedFavourites>;
+  selectedEpic: string | null;
+  childCount: (key: string) => number;
+  favourites: FavouriteState;
+  folderName: string;
+  folderError: string;
+  onFolderName: (value: string) => void;
+  onCreateFolder: () => void;
+  onRenameFolder: (from: string, to: string) => void;
+  onDeleteFolder: (name: string) => void;
+  onSelect: (key: string | null) => void;
+  onToggleFavourite: (key: string) => void;
+  onFile: (key: string, folder: string | null) => void;
+}) {
+  const [open, setOpen] = useState(
+    () => !hasStatus(readCollapsed(COLLAPSED_EPIC_STATUS_KEY, DEFAULT_COLLAPSED_EPIC_STATUS), "Favourites"),
+  );
+  function changeOpen(next: boolean) {
+    setOpen(next);
+    const collapsed = readCollapsed(COLLAPSED_EPIC_STATUS_KEY, DEFAULT_COLLAPSED_EPIC_STATUS);
+    if (next) {
+      for (const item of [...collapsed]) {
+        if (item.toLowerCase() === "favourites") collapsed.delete(item);
+      }
+    } else {
+      collapsed.add("Favourites");
+    }
+    writeCollapsed(collapsed, COLLAPSED_EPIC_STATUS_KEY);
+  }
+  const folderNames = favourites.folders.map((folder) => folder.name);
+  return (
+    <Collapsible open={open} onOpenChange={changeOpen} className="flex flex-col">
+      <div className="flex items-center gap-1 px-1">
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground flex h-7 min-w-0 flex-1 items-center gap-1.5 px-2 text-left"
+          >
+            <ChevronDownIcon
+              className={cn("size-3.5 shrink-0 transition-transform", !open && "-rotate-90")}
+            />
+            <span className="min-w-0 flex-1 truncate text-[12px] font-medium">Favourites</span>
+          </button>
+        </CollapsibleTrigger>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon-xs" variant="ghost" type="button" aria-label="Favourite Folders">
+              <MoreHorizontalIcon />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            <DropdownMenuLabel>Create Folder</DropdownMenuLabel>
+            <div className="px-2 pb-2">
+              <input
+                className="border-input h-7 w-full rounded-md border bg-transparent px-2 text-[13px] outline-none"
+                value={folderName}
+                onChange={(event) => onFolderName(event.target.value)}
+                placeholder="Name"
+                aria-label="Folder name"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") onCreateFolder();
+                }}
+              />
+              {folderError ? (
+                <p className="text-destructive pt-1 text-[11px]">{folderError}</p>
+              ) : null}
+            </div>
+            <DropdownMenuItem onClick={onCreateFolder}>Create</DropdownMenuItem>
+            {folderNames.length ? <DropdownMenuSeparator /> : null}
+            {folderNames.map((name) => (
+              <DropdownMenuItem
+                key={`rename-${name}`}
+                onClick={() => {
+                  const next = window.prompt("Rename Folder", name);
+                  if (next != null) onRenameFolder(name, next);
+                }}
+              >
+                Rename {name}
+              </DropdownMenuItem>
+            ))}
+            {folderNames.map((name) => (
+              <DropdownMenuItem key={`delete-${name}`} onClick={() => onDeleteFolder(name)}>
+                Delete {name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <CollapsibleContent className="flex flex-col gap-0.5">
+        {pane.unfiled.map((epic) => (
+          <EpicButton
+            key={epic.key}
+            epic={epic}
+            selected={selectedEpic === epic.key}
+            count={childCount(epic.key)}
+            favourited
+            folders={folderNames}
+            onSelect={onSelect}
+            onToggleFavourite={onToggleFavourite}
+            onFile={onFile}
+          />
+        ))}
+        {pane.folders.map((folder) => (
+          <FavouriteFolderGroup
+            key={folder.name}
+            folder={folder}
+            selectedEpic={selectedEpic}
+            childCount={childCount}
+            folderNames={folderNames}
+            onSelect={onSelect}
+            onToggleFavourite={onToggleFavourite}
+            onFile={onFile}
+          />
+        ))}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function FavouriteFolderGroup({
+  folder,
+  selectedEpic,
+  childCount,
+  folderNames,
+  onSelect,
+  onToggleFavourite,
+  onFile,
+}: {
+  folder: { name: string; epics: Epic[] };
+  selectedEpic: string | null;
+  childCount: (key: string) => number;
+  folderNames: string[];
+  onSelect: (key: string | null) => void;
+  onToggleFavourite: (key: string) => void;
+  onFile: (key: string, folder: string | null) => void;
+}) {
+  const [open, setOpen] = useState(
+    () => !hasStatus(readCollapsed(COLLAPSED_FOLDER_KEY), folder.name),
+  );
+  function changeOpen(next: boolean) {
+    setOpen(next);
+    const collapsed = readCollapsed(COLLAPSED_FOLDER_KEY);
+    if (next) {
+      for (const item of [...collapsed]) {
+        if (item.toLowerCase() === folder.name.toLowerCase()) collapsed.delete(item);
+      }
+    } else {
+      collapsed.add(folder.name);
+    }
+    writeCollapsed(collapsed, COLLAPSED_FOLDER_KEY);
+  }
+  return (
+    <Collapsible open={open} onOpenChange={changeOpen} className="flex flex-col">
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-foreground flex h-7 items-center gap-1.5 px-3 text-left"
+        >
+          <ChevronDownIcon
+            className={cn("size-3.5 shrink-0 transition-transform", !open && "-rotate-90")}
+          />
+          <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{folder.name}</span>
+          <span className="text-[11px] tabular-nums">{folder.epics.length}</span>
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="flex flex-col gap-0.5">
+        {folder.epics.map((epic) => (
+          <EpicButton
+            key={epic.key}
+            epic={epic}
+            selected={selectedEpic === epic.key}
+            count={childCount(epic.key)}
+            favourited
+            folders={folderNames}
+            onSelect={onSelect}
+            onToggleFavourite={onToggleFavourite}
+            onFile={onFile}
+          />
+        ))}
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

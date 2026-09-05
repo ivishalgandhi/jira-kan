@@ -91,6 +91,57 @@ test("Cards keep labels from the payload", () => {
   expect(board.columns[0].cards[2].labels).toEqual(["parser", "cli"]);
 });
 
+test("Cards keep assignee from displayName, name, or string", () => {
+  const board = issuesToBoard([
+    {
+      key: "DEMO-2",
+      fields: {
+        summary: "Display",
+        status: { name: "To Do" },
+        assignee: { displayName: "Person A" },
+      },
+    },
+    {
+      key: "DEMO-4",
+      fields: {
+        summary: "Name only",
+        status: { name: "To Do" },
+        assignee: { name: "jdoe" },
+      },
+    },
+    {
+      key: "DEMO-7",
+      fields: {
+        summary: "String",
+        status: { name: "To Do" },
+        assignee: "Person C",
+      },
+    },
+    {
+      key: "DEMO-8",
+      fields: {
+        summary: "Empty",
+        status: { name: "To Do" },
+        assignee: { displayName: "" },
+      },
+    },
+    {
+      key: "DEMO-9",
+      fields: {
+        summary: "Missing",
+        status: { name: "To Do" },
+      },
+    },
+  ]);
+  expect(board.columns[0].cards.map((card) => card.assignee)).toEqual([
+    "Person A",
+    "jdoe",
+    "Person C",
+    undefined,
+    undefined,
+  ]);
+});
+
 test("Card age is days since created", () => {
   const now = Date.parse("2026-09-04T12:00:00.000Z");
   expect(cardAge("2026-07-20T09:00:00.000+0000", now)).toBe("46d");
