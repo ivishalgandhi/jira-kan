@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,15 +7,16 @@ import { createBoardApp, refreshFromJira } from "./boot.ts";
 import { resolveJiraBin } from "./cli.ts";
 import { handleRequest } from "./http.ts";
 import { writeJiraConfig } from "./jira-config.ts";
-import { resolveListen } from "./listen.ts";
+import { bindListen, resolveListen } from "./listen.ts";
+import { readOptionalStdin } from "./stdin.ts";
 import { sendUi } from "./ui.ts";
 
 async function readPipe(): Promise<unknown | null> {
-  if (process.stdin.isTTY) return null;
-  const chunks: Buffer[] = [];
-  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
-  const text = Buffer.concat(chunks).toString("utf8").trim();
-  return text ? JSON.parse(text) : null;
+  return readOptionalStdin();
+}
+
+function announce(line: string) {
+  writeSync(1, `${line}\n`);
 }
 
 export async function runServer(opts: {
@@ -43,13 +44,14 @@ export async function runServer(opts: {
   });
 
   const { host, port } = resolveListen();
-  await new Promise<void>((resolve) => server.listen(port, host, resolve));
+  await bindListen(server, host, port);
   const origin = `http://127.0.0.1:${port}`;
   const fakeConfig = writeJiraConfig(join(tmpdir(), "pipe-kan"), origin);
-  console.log(`pipe-kan http://${host}:${port}`);
-  console.log(`cli ${kind === "jira" ? resolveJiraBin() : "store"}`);
-  console.log(`Fake Jira ${origin}/rest/api/2/search`);
-  console.log(`Fake Jira config ${fakeConfig}`);
+  announce(`pipe-kan http://${host}:${port}`);
+  announce(`cli ${kind === "jira" ? resolveJiraBin() : "store"}`);
+  announce(`Fake Jira ${origin}/rest/api/2/search`);
+  announce(`Fake Jira config ${fakeConfig}`);
+
 
   if (kind === "jira") {
     try {

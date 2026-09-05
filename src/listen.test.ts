@@ -12,3 +12,19 @@ test("listen honors HOST and PORT", () => {
     port: 4000,
   });
 });
+
+test("bindListen rejects when the port is taken", async () => {
+  const { createServer } = await import("node:http");
+  const { bindListen } = await import("./listen.ts");
+  const held = createServer();
+  await bindListen(held, "127.0.0.1", 0);
+  const addr = held.address();
+  if (!addr || typeof addr === "string") throw new Error("no port");
+  const other = createServer();
+  await expect(bindListen(other, "127.0.0.1", addr.port)).rejects.toMatchObject({
+    code: "EADDRINUSE",
+  });
+  held.close();
+  other.close();
+});
+
