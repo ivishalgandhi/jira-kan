@@ -253,3 +253,27 @@ export function mergeEpics(listed: Epic[], fromBoard: Epic[]): Epic[] {
   }
   return [...byKey.values()];
 }
+
+export function epicsToColumns(epics: Epic[]): Column[] {
+  const columns: Column[] = [];
+  const byStatus = new Map<string, Column>();
+  for (const epic of epics) {
+    const status = epic.status ?? "To Do";
+    let column = byStatus.get(status);
+    if (!column) {
+      column = { id: status, title: status, cards: [] };
+      byStatus.set(status, column);
+      columns.push(column);
+    }
+    column.cards.push({
+      key: epic.key,
+      summary: epic.summary,
+      type: "Epic",
+      ...(epic.priority ? { priority: epic.priority } : {}),
+      ...(epic.assignee ? { assignee: epic.assignee } : {}),
+      ...(epic.dueDate ? { dueDate: epic.dueDate } : {}),
+      ...(epic.labels ? { labels: epic.labels } : {}),
+    });
+  }
+  return columns;
+}

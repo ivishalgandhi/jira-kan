@@ -16,7 +16,7 @@ First paint is the Fixture. If `jira` is on PATH, the process then Refresh-es fr
 
 The published CLI is on npm. From a clone: `bun run build && bun dist/pipe-kan.js`.
 
-- Left: Epics. Center: Cards (one Column per status in the payload). Right: Open URL; remote Jira is a link, not an iframe.
+- Left: All stories and All epics. Center: Cards (one Column per status in the payload). Right: Open URL; remote Jira is a link, not an iframe.
 - Drop a Card on a Column to Move (`jira issue move`).
 - Same-Column drop and column reorder do nothing.
 - Theme is stored in `localStorage`.

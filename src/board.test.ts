@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, expectTypeOf, test } from "vitest";
 
-import { cardAge, issuesToBoard, mergeEpics, type Board, type Card, type Epic, type RawIssue } from "./board.ts";
+import { cardAge, epicsToColumns, issuesToBoard, mergeEpics, type Board, type Card, type Epic, type RawIssue } from "./board.ts";
 
 const fixture = JSON.parse(
   readFileSync(
@@ -287,4 +287,38 @@ test("mergeEpics keeps listed Epics that Scope missed", () => {
       [{ key: "SQLJIRA-1", summary: "SQLJIRA-1" }],
     ).map((epic) => epic.key),
   ).toEqual(["SQLJIRA-1", "SQLJIRA-9"]);
+});
+
+test("All epics maps listed Epics into Columns by first-seen status", () => {
+  const columns = epicsToColumns([
+    { key: "DEMO-7", summary: "Not started yet", status: "To Do" },
+    {
+      key: "DEMO-1",
+      summary: "Ship a local kanban",
+      status: "In Progress",
+      priority: "High",
+      assignee: "Person A",
+      labels: ["kanban"],
+    },
+    { key: "DEMO-8", summary: "Already an Epic in Done", status: "Done" },
+  ]);
+  expect(columns.map((column) => column.title)).toEqual([
+    "To Do",
+    "In Progress",
+    "Done",
+  ]);
+  expect(columns[1]?.cards).toEqual([
+    {
+      key: "DEMO-1",
+      summary: "Ship a local kanban",
+      type: "Epic",
+      priority: "High",
+      assignee: "Person A",
+      labels: ["kanban"],
+    },
+  ]);
+});
+
+test("an Epic without status lands in To Do", () => {
+  expect(epicsToColumns([{ key: "DEMO-9", summary: "Bare" }])[0]?.title).toBe("To Do");
 });

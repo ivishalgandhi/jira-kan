@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpDownIcon,
   ChevronDownIcon,
@@ -14,7 +14,7 @@ import {
   XIcon,
 } from "lucide-react";
 
-import { cardAge, type Board, type Card, type Column, type Epic } from "./board.ts";
+import { cardAge, epicsToColumns, type Board, type Card, type Column, type Epic } from "./board.ts";
 import { frameSrc, type OpenField } from "./open.ts";
 import {
   addFolder,
@@ -93,6 +93,7 @@ const COLLAPSED_KEY = "collapsed-columns";
 const COLLAPSED_EPIC_STATUS_KEY = "collapsed-epic-statuses";
 const COLLAPSED_FOLDER_KEY = "collapsed-favourite-folders";
 const CHROME_KEY = "board-chrome";
+const OPENER_KEY = "board-opener";
 const FAV_KEY = "favourite-epics";
 const PRESET_KEY = "board-presets";
 const DEFAULT_COLLAPSED_EPIC_STATUS = [
@@ -249,6 +250,18 @@ function readPresets(): Preset[] {
 
 function writePresets(next: Preset[]) {
   localStorage.setItem(PRESET_KEY, JSON.stringify(next));
+}
+
+function readOpener(): "stories" | "epics" {
+  try {
+    return localStorage.getItem(OPENER_KEY) === "epics" ? "epics" : "stories";
+  } catch {
+    return "stories";
+  }
+}
+
+function writeOpener(next: "stories" | "epics") {
+  localStorage.setItem(OPENER_KEY, next);
 }
 
 function fieldsFromCard(card: Card, url?: string | null): OpenField[] {
@@ -443,8 +456,15 @@ function IssueCard({
   const body = (
     <div className="bg-card hover:bg-foreground/5 rounded-[9px] border px-3 pt-2 pb-3">
       <div className="flex h-[22px] items-center justify-between gap-2">
-        <span className="text-muted-foreground text-[12px] font-medium tabular-nums">
-          {card.key}
+        <span className="flex min-w-0 items-baseline gap-1.5">
+          <span className="text-muted-foreground text-[12px] font-medium tabular-nums">
+            {card.key}
+          </span>
+          {(card.type ?? "").toLowerCase() === "epic" ? (
+            <span className="text-muted-foreground/60 text-[11px] font-normal">
+              Epic
+            </span>
+          ) : null}
         </span>
         {age ? (
           <span className="text-muted-foreground text-[11px] tabular-nums">
@@ -857,11 +877,14 @@ export function App() {
   const [folderError, setFolderError] = useState("");
   const [presetName, setPresetName] = useState("");
   const [presetError, setPresetError] = useState("");
+  const [boardKind, setBoardKind] = useState<"stories" | "epics">(readOpener);
+  const lastBoard = useRef<Board | null>(null);
 
   const visibleOpts: VisibleOpts = { ...chrome, epics };
+  const epicBoard = boardKind === "epics";
   const visible = useMemo(
-    () => filterValue(columns, selectedEpic, search, visibleOpts),
-    [columns, selectedEpic, search, chrome, epics],
+    () => filterValue(columns, epicBoard ? null : selectedEpic, search, visibleOpts),
+    [columns, selectedEpic, search, chrome, epics, epicBoard],
   );
   const allCards = useMemo(() => Object.values(columns).flat(), [columns]);
   const childrenList = epicChildren ?? allCards;
@@ -914,9 +937,19 @@ export function App() {
     writePresets(next);
   }
 
+  function paintBoard(next: Board, kind: "stories" | "epics") {
+    const listed = next.epics ?? [];
+    setColumns(kind === "epics" ? toValue(epicsToColumns(listed)) : toValue(next.columns));
+    setEpics(listed);
+    setEpicChildren(next.children ? Object.values(next.children).flat() : null);
+    if (next.error) setError(next.error);
+  }
+
   function applyBoard(next: Board) {
-    setColumns(toValue(next.columns));
-    setEpics(next.epics ?? []);
+    lastBoard.current = next;
+    const listed = next.epics ?? [];
+    setColumns(boardKind === "epics" ? toValue(epicsToColumns(listed)) : toValue(next.columns));
+    setEpics(listed);
     setEpicChildren(next.children ? Object.values(next.children).flat() : null);
     setSelectedEpic((current) =>
       current && (next.epics ?? []).some((epic) => epic.key === current)
@@ -1026,14 +1059,30 @@ export function App() {
     return epicChildCount(childrenList, key, search, chrome.filter, epics);
   }
 
-  function scopeChildCount(key: string) {
-    return allCards.filter((card) => card.epic === key && cardMatches(card, search)).length;
+  function openStories() {
+    writeOpener("stories");
+    setBoardKind("stories");
+    setSelectedEpic(null);
+    if (lastBoard.current) paintBoard(lastBoard.current, "stories");
+  }
+
+  function openEpics() {
+    writeOpener("epics");
+    setBoardKind("epics");
+    setSelectedEpic(null);
+    if (lastBoard.current) paintBoard(lastBoard.current, "epics");
   }
 
   async function selectEpic(key: string | null) {
+    const fromEpics = boardKind === "epics";
+    if (fromEpics) openStories();
     setSelectedEpic(key);
     if (!key) return;
-    if (scopeChildCount(key) > 0) return;
+    const cards =
+      fromEpics && lastBoard.current
+        ? lastBoard.current.columns.flatMap((column) => column.cards)
+        : allCards;
+    if (cards.filter((card) => card.epic === key && cardMatches(card, search)).length > 0) return;
     setBusy(true);
     setError("");
     try {
@@ -1075,6 +1124,7 @@ export function App() {
     const result = applyPreset(presets, name);
     if (!result.ok) return;
     persistChrome(result.chrome);
+    if (boardKind === "epics") openStories();
   }
 
   function overwriteNamedPreset(name: string) {
@@ -1121,13 +1171,25 @@ export function App() {
                 type="button"
                 className={cn(
                   "h-8 rounded-lg px-3 text-left text-[13px]",
-                  selectedEpic === null
+                  boardKind === "stories" && selectedEpic === null
                     ? "bg-sidebar-accent text-sidebar-accent-foreground"
                     : "hover:bg-foreground/5",
                 )}
-                onClick={() => void selectEpic(null)}
+                onClick={openStories}
               >
                 All stories
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "h-8 rounded-lg px-3 text-left text-[13px]",
+                  boardKind === "epics"
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "hover:bg-foreground/5",
+                )}
+                onClick={openEpics}
+              >
+                All epics
               </button>
               {showFavourites ? (
                 <FavouriteGroup
@@ -1168,6 +1230,8 @@ export function App() {
                 onRenamePreset={renameNamedPreset}
                 onDeletePreset={(name) => persistPresets(removePreset(presets, name))}
               />
+              {boardKind === "stories" ? (
+              <>
               <div className="text-muted-foreground px-3 pt-3 pb-1 text-[11px] font-medium">
                 Epics
               </div>
@@ -1203,6 +1267,8 @@ export function App() {
                   ))
                 ),
               )}
+              </>
+              ) : null}
             </nav>
           </aside>
         </ResizablePanel>
