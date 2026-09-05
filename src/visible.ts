@@ -518,3 +518,86 @@ export function moveFavourite(
   }
   return { keys, folders };
 }
+
+export type Preset = {
+  name: string;
+  filter: BoardFilter;
+  sort: BoardSort;
+  hide: string[];
+};
+
+function presetOf(name: string, presets: Preset[]) {
+  return presets.find((preset) => preset.name.toLowerCase() === name.trim().toLowerCase());
+}
+
+function snapshotChrome(chrome: Pick<Preset, "filter" | "sort" | "hide">) {
+  return {
+    filter: { ...chrome.filter },
+    sort: chrome.sort,
+    hide: [...chrome.hide],
+  };
+}
+
+export function addPreset(
+  presets: Preset[],
+  name: string,
+  chrome: Pick<Preset, "filter" | "sort" | "hide">,
+): { ok: true; presets: Preset[] } | { ok: false } {
+  const trimmed = name.trim();
+  if (!trimmed || presetOf(trimmed, presets)) return { ok: false };
+  return {
+    ok: true,
+    presets: [
+      ...presets,
+      { name: trimmed, ...snapshotChrome(chrome) },
+    ],
+  };
+}
+
+export function applyPreset(
+  presets: Preset[],
+  name: string,
+): { ok: true; chrome: Pick<Preset, "filter" | "sort" | "hide"> } | { ok: false } {
+  const current = presetOf(name, presets);
+  if (!current) return { ok: false };
+  return { ok: true, chrome: snapshotChrome(current) };
+}
+
+export function overwritePreset(
+  presets: Preset[],
+  name: string,
+  chrome: Pick<Preset, "filter" | "sort" | "hide">,
+): { ok: true; presets: Preset[] } | { ok: false } {
+  const current = presetOf(name, presets);
+  if (!current) return { ok: false };
+  return {
+    ok: true,
+    presets: presets.map((preset) =>
+      preset === current
+        ? { name: current.name, ...snapshotChrome(chrome) }
+        : preset,
+    ),
+  };
+}
+
+export function renamePreset(
+  presets: Preset[],
+  from: string,
+  to: string,
+): { ok: true; presets: Preset[] } | { ok: false } {
+  const trimmed = to.trim();
+  const current = presetOf(from, presets);
+  if (!trimmed || !current) return { ok: false };
+  const clash = presetOf(trimmed, presets);
+  if (clash) return { ok: false };
+  return {
+    ok: true,
+    presets: presets.map((preset) =>
+      preset === current ? { ...preset, name: trimmed } : preset,
+    ),
+  };
+}
+
+export function removePreset(presets: Preset[], name: string): Preset[] {
+  return presets.filter((preset) => preset.name.toLowerCase() !== name.trim().toLowerCase());
+}

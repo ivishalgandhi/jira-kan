@@ -3,6 +3,11 @@ import { expect, test } from "vitest";
 import type { Card, Epic } from "./board.ts";
 import {
   addFolder,
+  addPreset,
+  applyPreset,
+  overwritePreset,
+  removePreset,
+  renamePreset,
   epicChildCount,
   favouriteGroup,
   filterEpics,
@@ -636,4 +641,85 @@ test("an empty Folder stays after Filter hides its Favourites", () => {
     unfiled: [],
     folders: [{ name: "Later", epics: [] }],
   });
+});
+
+const nowChrome = {
+  filter: { priority: ["High"] },
+  sort: "priority" as const,
+  hide: ["Done"],
+};
+
+test("Save appends a Preset and Apply returns that chrome", () => {
+  const saved = addPreset([], "Now", nowChrome);
+  expect(saved.ok).toBe(true);
+  if (!saved.ok) return;
+  expect(saved.presets.map((preset) => preset.name)).toEqual(["Now"]);
+  expect(applyPreset(saved.presets, "Now")).toEqual({ ok: true, chrome: nowChrome });
+});
+
+test("empty or clashing Preset names fail", () => {
+  expect(addPreset([], "   ", nowChrome).ok).toBe(false);
+  const saved = addPreset([], "Now", nowChrome);
+  expect(saved.ok).toBe(true);
+  if (!saved.ok) return;
+  expect(addPreset(saved.presets, "now", nowChrome).ok).toBe(false);
+  expect(applyPreset(saved.presets, "Later").ok).toBe(false);
+});
+
+test("two Preset names may hold the same chrome", () => {
+  const first = addPreset([], "Now", nowChrome);
+  expect(first.ok).toBe(true);
+  if (!first.ok) return;
+  const second = addPreset(first.presets, "Later", nowChrome);
+  expect(second.ok).toBe(true);
+  if (!second.ok) return;
+  expect(second.presets.map((preset) => preset.name)).toEqual(["Now", "Later"]);
+  expect(applyPreset(second.presets, "Later")).toEqual({ ok: true, chrome: nowChrome });
+});
+
+const laterChrome = {
+  filter: { assignee: ["Ada"] },
+  sort: "age" as const,
+  hide: [],
+};
+
+test("Save over replaces Preset chrome and keeps the name", () => {
+  const saved = addPreset([], "Now", nowChrome);
+  expect(saved.ok).toBe(true);
+  if (!saved.ok) return;
+  expect(overwritePreset([], "Now", laterChrome).ok).toBe(false);
+  const over = overwritePreset(saved.presets, "Now", laterChrome);
+  expect(over.ok).toBe(true);
+  if (!over.ok) return;
+  expect(over.presets.map((preset) => preset.name)).toEqual(["Now"]);
+  expect(applyPreset(over.presets, "Now")).toEqual({ ok: true, chrome: laterChrome });
+});
+
+test("Rename Preset uses the same uniqueness rule as Save", () => {
+  const first = addPreset([], "Now", nowChrome);
+  expect(first.ok).toBe(true);
+  if (!first.ok) return;
+  const second = addPreset(first.presets, "Later", laterChrome);
+  expect(second.ok).toBe(true);
+  if (!second.ok) return;
+  expect(renamePreset(second.presets, "Later", "   ").ok).toBe(false);
+  expect(renamePreset(second.presets, "Later", "now").ok).toBe(false);
+  expect(renamePreset(second.presets, "Later", "Later").ok).toBe(false);
+  const renamed = renamePreset(second.presets, "Later", "Soon");
+  expect(renamed.ok).toBe(true);
+  if (!renamed.ok) return;
+  expect(renamed.presets.map((preset) => preset.name)).toEqual(["Now", "Soon"]);
+  expect(applyPreset(renamed.presets, "Soon")).toEqual({ ok: true, chrome: laterChrome });
+});
+
+test("Delete drops a Preset and leaves the others", () => {
+  const first = addPreset([], "Now", nowChrome);
+  expect(first.ok).toBe(true);
+  if (!first.ok) return;
+  const second = addPreset(first.presets, "Later", laterChrome);
+  expect(second.ok).toBe(true);
+  if (!second.ok) return;
+  const remaining = removePreset(second.presets, "Later");
+  expect(remaining.map((preset) => preset.name)).toEqual(["Now"]);
+  expect(applyPreset(remaining, "Now")).toEqual({ ok: true, chrome: nowChrome });
 });

@@ -18,6 +18,8 @@ import { cardAge, type Board, type Card, type Column, type Epic } from "./board.
 import { frameSrc, type OpenField } from "./open.ts";
 import {
   addFolder,
+  addPreset,
+  applyPreset,
   cardMatches,
   epicChildCount,
   filterEpics,
@@ -27,8 +29,11 @@ import {
   listedFavourites,
   mergeValue,
   moveFavourite,
+  overwritePreset,
   removeFolder,
+  removePreset,
   renameFolder,
+  renamePreset,
   rollbackColumns,
   stampEpic,
   toggleFavourite,
@@ -36,6 +41,7 @@ import {
   type BoardSort,
   type FavouriteState,
   type FilterFacet,
+  type Preset,
   type VisibleOpts,
 } from "./visible.ts";
 import { Avatar, AvatarFallback } from "~/components/ui/avatar";
@@ -88,6 +94,7 @@ const COLLAPSED_EPIC_STATUS_KEY = "collapsed-epic-statuses";
 const COLLAPSED_FOLDER_KEY = "collapsed-favourite-folders";
 const CHROME_KEY = "board-chrome";
 const FAV_KEY = "favourite-epics";
+const PRESET_KEY = "board-presets";
 const DEFAULT_COLLAPSED_EPIC_STATUS = [
   "In Progress",
   "Completed",
@@ -208,6 +215,40 @@ function readFavourites(): FavouriteState {
 
 function writeFavourites(next: FavouriteState) {
   localStorage.setItem(FAV_KEY, JSON.stringify(next));
+}
+
+function readPresets(): Preset[] {
+  try {
+    const stored = localStorage.getItem(PRESET_KEY);
+    if (stored === null) return [];
+    const raw = JSON.parse(stored) as unknown;
+    if (!Array.isArray(raw)) return [];
+    return raw.flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const value = item as {
+        name?: unknown;
+        filter?: BoardFilter & { priorities?: string[]; assignees?: string[] };
+        sort?: unknown;
+        hide?: unknown;
+      };
+      if (typeof value.name !== "string" || !value.name.trim()) return [];
+      return [{
+        name: value.name,
+        filter: readFilter(value.filter),
+        sort:
+          value.sort === "priority" || value.sort === "age" || value.sort === "due" || value.sort === "key"
+            ? value.sort
+            : "payload",
+        hide: Array.isArray(value.hide) ? value.hide.filter((entry) => typeof entry === "string") : [],
+      }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function writePresets(next: Preset[]) {
+  localStorage.setItem(PRESET_KEY, JSON.stringify(next));
 }
 
 function fieldsFromCard(card: Card, url?: string | null): OpenField[] {
@@ -811,8 +852,11 @@ export function App() {
   const [theme, setTheme] = useState<Theme>(readTheme);
   const [chrome, setChrome] = useState<Chrome>(readChrome);
   const [favourites, setFavourites] = useState<FavouriteState>(readFavourites);
+  const [presets, setPresets] = useState<Preset[]>(readPresets);
   const [folderName, setFolderName] = useState("");
   const [folderError, setFolderError] = useState("");
+  const [presetName, setPresetName] = useState("");
+  const [presetError, setPresetError] = useState("");
 
   const visibleOpts: VisibleOpts = { ...chrome, epics };
   const visible = useMemo(
@@ -863,6 +907,11 @@ export function App() {
   function persistFavourites(next: FavouriteState) {
     setFavourites(next);
     writeFavourites(next);
+  }
+
+  function persistPresets(next: Preset[]) {
+    setPresets(next);
+    writePresets(next);
   }
 
   function applyBoard(next: Board) {
@@ -1011,6 +1060,39 @@ export function App() {
     persistFavourites(result.state);
   }
 
+  function createPreset() {
+    const result = addPreset(presets, presetName, chrome);
+    if (!result.ok) {
+      setPresetError("Preset names must be unique");
+      return;
+    }
+    setPresetName("");
+    setPresetError("");
+    persistPresets(result.presets);
+  }
+
+  function applyNamedPreset(name: string) {
+    const result = applyPreset(presets, name);
+    if (!result.ok) return;
+    persistChrome(result.chrome);
+  }
+
+  function overwriteNamedPreset(name: string) {
+    const result = overwritePreset(presets, name, chrome);
+    if (!result.ok) return;
+    persistPresets(result.presets);
+  }
+
+  function renameNamedPreset(from: string, to: string) {
+    const result = renamePreset(presets, from, to);
+    if (!result.ok) {
+      setPresetError("Preset names must be unique");
+      return;
+    }
+    setPresetError("");
+    persistPresets(result.presets);
+  }
+
   return (
     <div className="bg-sidebar flex h-screen">
       <ResizablePanelGroup
@@ -1075,6 +1157,17 @@ export function App() {
                   onOpen={open}
                 />
               ) : null}
+              <PresetGroup
+                presets={presets}
+                presetName={presetName}
+                presetError={presetError}
+                onPresetName={setPresetName}
+                onCreatePreset={createPreset}
+                onApplyPreset={applyNamedPreset}
+                onOverwritePreset={overwriteNamedPreset}
+                onRenamePreset={renameNamedPreset}
+                onDeletePreset={(name) => persistPresets(removePreset(presets, name))}
+              />
               <div className="text-muted-foreground px-3 pt-3 pb-1 text-[11px] font-medium">
                 Epics
               </div>
@@ -1596,6 +1689,123 @@ function FavouriteFolderGroup({
             onMove={onMove}
             onOpen={onOpen}
           />
+        ))}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function PresetGroup({
+  presets,
+  presetName,
+  presetError,
+  onPresetName,
+  onCreatePreset,
+  onApplyPreset,
+  onOverwritePreset,
+  onRenamePreset,
+  onDeletePreset,
+}: {
+  presets: Preset[];
+  presetName: string;
+  presetError: string;
+  onPresetName: (value: string) => void;
+  onCreatePreset: () => void;
+  onApplyPreset: (name: string) => void;
+  onOverwritePreset: (name: string) => void;
+  onRenamePreset: (from: string, to: string) => void;
+  onDeletePreset: (name: string) => void;
+}) {
+  const [open, setOpen] = useState(
+    () => !hasStatus(readCollapsed(COLLAPSED_EPIC_STATUS_KEY, DEFAULT_COLLAPSED_EPIC_STATUS), "Presets"),
+  );
+  function changeOpen(next: boolean) {
+    setOpen(next);
+    const collapsed = readCollapsed(COLLAPSED_EPIC_STATUS_KEY, DEFAULT_COLLAPSED_EPIC_STATUS);
+    if (next) {
+      for (const item of [...collapsed]) {
+        if (item.toLowerCase() === "presets") collapsed.delete(item);
+      }
+    } else {
+      collapsed.add("Presets");
+    }
+    writeCollapsed(collapsed, COLLAPSED_EPIC_STATUS_KEY);
+  }
+  return (
+    <Collapsible open={open} onOpenChange={changeOpen} className="flex flex-col">
+      <div className="flex items-center gap-1 px-1">
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground flex h-7 min-w-0 flex-1 items-center gap-1.5 px-2 text-left"
+          >
+            <ChevronDownIcon
+              className={cn("size-3.5 shrink-0 transition-transform", !open && "-rotate-90")}
+            />
+            <span className="min-w-0 flex-1 truncate text-[12px] font-medium">Presets</span>
+          </button>
+        </CollapsibleTrigger>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon-xs" variant="ghost" type="button" aria-label="Presets">
+              <MoreHorizontalIcon />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56">
+            <DropdownMenuLabel>Save Preset</DropdownMenuLabel>
+            <div className="px-2 pb-2">
+              <input
+                className="border-input h-7 w-full rounded-md border bg-transparent px-2 text-[13px] outline-none"
+                value={presetName}
+                onChange={(event) => onPresetName(event.target.value)}
+                placeholder="Name"
+                aria-label="Preset name"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") onCreatePreset();
+                }}
+              />
+              {presetError ? (
+                <p className="text-destructive pt-1 text-[11px]">{presetError}</p>
+              ) : null}
+            </div>
+            <DropdownMenuItem onClick={onCreatePreset}>Save</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <CollapsibleContent className="flex flex-col gap-0.5">
+        {presets.map((preset) => (
+          <div key={preset.name} className="flex items-center gap-1">
+            <button
+              type="button"
+              className="hover:bg-foreground/5 flex h-7 min-w-0 flex-1 items-center rounded-lg px-[7px] text-left text-[13px] font-medium"
+              onClick={() => onApplyPreset(preset.name)}
+            >
+              <span className="min-w-0 truncate">{preset.name}</span>
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon-xs" variant="ghost" type="button" aria-label={`Preset ${preset.name}`}>
+                  <MoreHorizontalIcon />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onOverwritePreset(preset.name)}>
+                  Save over
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    const next = window.prompt("Rename Preset", preset.name);
+                    if (next != null) onRenamePreset(preset.name, next);
+                  }}
+                >
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onDeletePreset(preset.name)}>
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         ))}
       </CollapsibleContent>
     </Collapsible>
