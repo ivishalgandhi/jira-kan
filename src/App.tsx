@@ -19,6 +19,7 @@ import { frameSrc, type OpenField } from "./open.ts";
 import {
   addFolder,
   cardMatches,
+  epicChildCount,
   filterEpics,
   filterFacets,
   filterValue,
@@ -53,6 +54,9 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import {
@@ -551,25 +555,40 @@ function StatusColumn({
   );
 }
 
+function epicMoveTargets(epics: Epic[], current?: string) {
+  return [...new Set(
+    epics
+      .map((item) => item.status?.trim())
+      .filter((status): status is string => Boolean(status)),
+  )].filter((status) => status !== current);
+}
+
 function EpicButton({
   epic,
   selected,
   count,
   favourited,
   folders,
+  moveTo,
   onSelect,
   onToggleFavourite,
   onFile,
+  onMove,
 }: {
   epic: Epic;
   selected: boolean;
   count: number;
   favourited: boolean;
   folders?: string[];
+  moveTo?: string[];
   onSelect: (key: string | null) => void;
   onToggleFavourite: (key: string) => void;
   onFile?: (key: string, folder: string | null) => void;
+  onMove?: (key: string, status: string) => void;
 }) {
+  const destinations = moveTo ?? [];
+  const fileMenu = Boolean(onFile && favourited);
+  const showMenu = fileMenu || destinations.length > 0;
   return (
     <div
       className={cn(
@@ -596,20 +615,48 @@ function EpicButton({
         </span>
         <span className="text-muted-foreground text-[11px] tabular-nums">{count}</span>
       </button>
-      {onFile && favourited ? (
+      {showMenu ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="icon-xs" variant="ghost" type="button" aria-label={`Move ${epic.key}`}>
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              type="button"
+              aria-label={fileMenu ? `File ${epic.key}` : `Move ${epic.key}`}
+            >
               <MoreHorizontalIcon />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onFile(epic.key, null)}>Unfiled</DropdownMenuItem>
-            {folders?.map((folder) => (
-              <DropdownMenuItem key={folder} onClick={() => onFile(epic.key, folder)}>
-                {folder}
-              </DropdownMenuItem>
-            ))}
+            {fileMenu ? (
+              <>
+                <DropdownMenuItem onClick={() => onFile?.(epic.key, null)}>Unfiled</DropdownMenuItem>
+                {folders?.map((folder) => (
+                  <DropdownMenuItem key={folder} onClick={() => onFile?.(epic.key, folder)}>
+                    {folder}
+                  </DropdownMenuItem>
+                ))}
+              </>
+            ) : null}
+            {fileMenu && destinations.length ? (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>Move</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {destinations.map((status) => (
+                    <DropdownMenuItem key={status} onClick={() => onMove?.(epic.key, status)}>
+                      {status}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            ) : null}
+            {!fileMenu
+              ? destinations.map((status) => (
+                  <DropdownMenuItem key={status} onClick={() => onMove?.(epic.key, status)}>
+                    {status}
+                  </DropdownMenuItem>
+                ))
+              : null}
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
@@ -635,16 +682,20 @@ function EpicStatusGroup({
   selectedEpic,
   childCount,
   favourites,
+  listedEpics,
   onSelect,
   onToggleFavourite,
+  onMove,
 }: {
   status: string;
   epics: Epic[];
   selectedEpic: string | null;
   childCount: (key: string) => number;
   favourites: FavouriteState;
+  listedEpics: Epic[];
   onSelect: (key: string | null) => void;
   onToggleFavourite: (key: string) => void;
+  onMove: (key: string, status: string) => void;
 }) {
   const [open, setOpen] = useState(
     () => !hasStatus(readCollapsed(COLLAPSED_EPIC_STATUS_KEY, DEFAULT_COLLAPSED_EPIC_STATUS), status),
@@ -690,6 +741,8 @@ function EpicStatusGroup({
             favourited={favourites.keys.includes(epic.key)}
             onSelect={onSelect}
             onToggleFavourite={onToggleFavourite}
+            moveTo={epicMoveTargets(listedEpics, epic.status)}
+            onMove={onMove}
           />
         ))}
       </CollapsibleContent>
@@ -737,6 +790,7 @@ function OpenFields({ fields }: { fields: OpenField[] }) {
 export function App() {
   const [columns, setColumns] = useState<Record<string, Card[]>>({});
   const [epics, setEpics] = useState<Epic[]>([]);
+  const [epicChildren, setEpicChildren] = useState<Card[] | null>(null);
   const [selectedEpic, setSelectedEpic] = useState<string | null>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [openUrl, setOpenUrl] = useState<string | null>(null);
@@ -758,14 +812,15 @@ export function App() {
     [columns, selectedEpic, search, chrome, epics],
   );
   const allCards = useMemo(() => Object.values(columns).flat(), [columns]);
+  const childrenList = epicChildren ?? allCards;
   const visibleEpics = useMemo(
-    () => filterEpics(epics, allCards, search),
-    [epics, allCards, search],
+    () => filterEpics(epics, childrenList, search, chrome.filter),
+    [epics, childrenList, search, chrome.filter],
   );
   const epicGroups = useMemo(() => groupEpics(visibleEpics), [visibleEpics]);
   const favouritePane = useMemo(
-    () => listedFavourites(epics, favourites, search, allCards),
-    [epics, favourites, search, allCards],
+    () => listedFavourites(epics, favourites, search, childrenList, chrome.filter),
+    [epics, favourites, search, childrenList, chrome.filter],
   );
   const columnIds = Object.keys(visible);
   const boardOpenIds = openKey ? ["cards", "open"] : ["cards"];
@@ -805,11 +860,13 @@ export function App() {
   function applyBoard(next: Board) {
     setColumns(toValue(next.columns));
     setEpics(next.epics ?? []);
+    setEpicChildren(next.children ? Object.values(next.children).flat() : null);
     setSelectedEpic((current) =>
       current && (next.epics ?? []).some((epic) => epic.key === current)
         ? current
         : null,
     );
+    if (next.error) setError(next.error);
   }
 
   async function load() {
@@ -898,13 +955,17 @@ export function App() {
   }
 
   function childCount(key: string) {
+    return epicChildCount(childrenList, key, search, chrome.filter, epics);
+  }
+
+  function scopeChildCount(key: string) {
     return allCards.filter((card) => card.epic === key && cardMatches(card, search)).length;
   }
 
   async function selectEpic(key: string | null) {
     setSelectedEpic(key);
     if (!key) return;
-    if (childCount(key) > 0) return;
+    if (scopeChildCount(key) > 0) return;
     setBusy(true);
     setError("");
     try {
@@ -987,9 +1048,11 @@ export function App() {
                     persistFavourites(result.state);
                   }}
                   onDeleteFolder={(name) => persistFavourites(removeFolder(favourites, name))}
+                  listedEpics={epics}
                   onSelect={selectEpic}
                   onToggleFavourite={(key) => persistFavourites(toggleFavourite(favourites, key))}
                   onFile={(key, folder) => persistFavourites(moveFavourite(favourites, key, folder))}
+                  onMove={move}
                 />
               ) : null}
               <div className="text-muted-foreground px-3 pt-3 pb-1 text-[11px] font-medium">
@@ -1004,8 +1067,10 @@ export function App() {
                     selectedEpic={selectedEpic}
                     childCount={childCount}
                     favourites={favourites}
+                    listedEpics={epics}
                     onSelect={selectEpic}
                     onToggleFavourite={(key) => persistFavourites(toggleFavourite(favourites, key))}
+                    onMove={move}
                   />
                 ) : (
                   group.epics.map((epic) => (
@@ -1015,8 +1080,10 @@ export function App() {
                       selected={selectedEpic === epic.key}
                       count={childCount(epic.key)}
                       favourited={favourites.keys.includes(epic.key)}
+                      moveTo={epicMoveTargets(epics, epic.status)}
                       onSelect={selectEpic}
                       onToggleFavourite={(key) => persistFavourites(toggleFavourite(favourites, key))}
+                      onMove={move}
                     />
                   ))
                 ),
@@ -1304,9 +1371,11 @@ function FavouriteGroup({
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
+  listedEpics,
   onSelect,
   onToggleFavourite,
   onFile,
+  onMove,
 }: {
   pane: ReturnType<typeof listedFavourites>;
   selectedEpic: string | null;
@@ -1318,9 +1387,11 @@ function FavouriteGroup({
   onCreateFolder: () => void;
   onRenameFolder: (from: string, to: string) => void;
   onDeleteFolder: (name: string) => void;
+  listedEpics: Epic[];
   onSelect: (key: string | null) => void;
   onToggleFavourite: (key: string) => void;
   onFile: (key: string, folder: string | null) => void;
+  onMove: (key: string, status: string) => void;
 }) {
   const [open, setOpen] = useState(
     () => !hasStatus(readCollapsed(COLLAPSED_EPIC_STATUS_KEY, DEFAULT_COLLAPSED_EPIC_STATUS), "Favourites"),
@@ -1408,6 +1479,8 @@ function FavouriteGroup({
             onSelect={onSelect}
             onToggleFavourite={onToggleFavourite}
             onFile={onFile}
+            moveTo={epicMoveTargets(listedEpics, epic.status)}
+            onMove={onMove}
           />
         ))}
         {pane.folders.map((folder) => (
@@ -1417,9 +1490,11 @@ function FavouriteGroup({
             selectedEpic={selectedEpic}
             childCount={childCount}
             folderNames={folderNames}
+            listedEpics={listedEpics}
             onSelect={onSelect}
             onToggleFavourite={onToggleFavourite}
             onFile={onFile}
+            onMove={onMove}
           />
         ))}
       </CollapsibleContent>
@@ -1432,17 +1507,21 @@ function FavouriteFolderGroup({
   selectedEpic,
   childCount,
   folderNames,
+  listedEpics,
   onSelect,
   onToggleFavourite,
   onFile,
+  onMove,
 }: {
   folder: { name: string; epics: Epic[] };
   selectedEpic: string | null;
   childCount: (key: string) => number;
   folderNames: string[];
+  listedEpics: Epic[];
   onSelect: (key: string | null) => void;
   onToggleFavourite: (key: string) => void;
   onFile: (key: string, folder: string | null) => void;
+  onMove: (key: string, status: string) => void;
 }) {
   const [open, setOpen] = useState(
     () => !hasStatus(readCollapsed(COLLAPSED_FOLDER_KEY), folder.name),
@@ -1485,6 +1564,8 @@ function FavouriteFolderGroup({
             onSelect={onSelect}
             onToggleFavourite={onToggleFavourite}
             onFile={onFile}
+            moveTo={epicMoveTargets(listedEpics, epic.status)}
+            onMove={onMove}
           />
         ))}
       </CollapsibleContent>

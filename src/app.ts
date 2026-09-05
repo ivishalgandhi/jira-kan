@@ -1,12 +1,12 @@
-import { issuesToBoard, mergeEpics, type Board } from "./board.ts";
+import { issuesToBoard, mergeEpics, type Board, type Card } from "./board.ts";
 import { createStoreCli, type Cli } from "./cli.ts";
-import { DEFAULT_FLAGS } from "./flags.ts";
+import { DEFAULT_FLAGS, flagsToJql } from "./flags.ts";
 import { flattenIssue, type OpenField } from "./open.ts";
 import { IssueStore } from "./store.ts";
 
 export type App = {
   flags: string;
-  hydrate(raw: unknown): Board;
+  hydrate(raw: unknown, opts?: { fromStore?: boolean }): Board;
   refresh(flags?: string): Promise<Board>;
   children(epic: string): Promise<Board>;
   board(): Board;
@@ -17,11 +17,40 @@ export type App = {
   open(key: string): Promise<{ url: string; fields: OpenField[]; error?: string }>;
 };
 
+function columnsOf(raw: unknown): Record<string, Card[]> {
+  return Object.fromEntries(
+    issuesToBoard(raw).columns.map((column) => [column.title, column.cards]),
+  );
+}
+
+function stampMissingEpic(board: Board, epic: string): Board {
+  for (const column of board.columns) {
+    for (const card of column.cards) {
+      if (!card.epic) card.epic = epic;
+    }
+  }
+  return board;
+}
+
 export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
   const cli = opts.cli ?? createStoreCli(opts.store);
   let flags = DEFAULT_FLAGS;
   let payload: unknown[] = [];
   let epicsPayload: unknown[] = [];
+  let childrenRaw: unknown[] = [];
+  let hasChildrenCache = false;
+  let childrenError: string | undefined;
+
+  function listedEpicKeys() {
+    return issuesToBoard(epicsPayload).epics.map((epic) => epic.key);
+  }
+
+  function cacheFromStore() {
+    epicsPayload = opts.store.list(flagsToJql("-tEpic"));
+    childrenRaw = opts.store.childrenOf(listedEpicKeys());
+    hasChildrenCache = true;
+    childrenError = undefined;
+  }
 
   const app: App = {
     get flags() {
@@ -32,35 +61,66 @@ export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
       return {
         columns: board.columns,
         epics: mergeEpics(issuesToBoard(epicsPayload).epics, board.epics),
+        ...(hasChildrenCache ? { children: columnsOf(childrenRaw) } : {}),
+        ...(childrenError ? { error: childrenError } : {}),
       };
     },
-    hydrate(raw) {
+    hydrate(raw, hydrateOpts) {
       payload = Array.isArray(raw) ? raw : [];
       epicsPayload = [];
+      childrenRaw = [];
+      hasChildrenCache = false;
+      childrenError = undefined;
+      if (hydrateOpts?.fromStore) cacheFromStore();
       return app.board();
     },
     async refresh(next) {
       if (next !== undefined) flags = next;
+      childrenError = undefined;
       const [issues, epics] = await Promise.all([
         cli.list(flags),
         cli.listEpics(),
       ]);
       payload = JSON.parse(issues);
       epicsPayload = JSON.parse(epics);
+      const keys = listedEpicKeys();
+      try {
+        childrenRaw = JSON.parse(await cli.listChildren(keys));
+        hasChildrenCache = true;
+      } catch (err) {
+        hasChildrenCache = false;
+        childrenRaw = [];
+        childrenError = err instanceof Error ? err.message : "Epic children list failed";
+      }
       return app.board();
     },
     async children(epic) {
-      const board = issuesToBoard(JSON.parse(await cli.listEpic(epic)));
-      for (const column of board.columns) {
-        for (const card of column.cards) {
-          if (!card.epic) card.epic = epic;
-        }
+      if (hasChildrenCache) {
+        const cards = Object.fromEntries(
+          Object.entries(columnsOf(childrenRaw)).map(([title, list]) => [
+            title,
+            list.filter((card) => card.epic === epic).map((card) => ({
+              ...card,
+              epic: card.epic ?? epic,
+            })),
+          ]),
+        );
+        return {
+          columns: Object.entries(cards)
+            .filter(([, list]) => list.length)
+            .map(([title, list]) => ({ id: title, title, cards: list })),
+          epics: [],
+        };
       }
-      return board;
+      return stampMissingEpic(issuesToBoard(JSON.parse(await cli.listEpic(epic))), epic);
     },
     async move(key, status) {
-      const current = (payload as { key?: string; fields?: { status?: { name?: string } } }[])
+      const fromPayload = (payload as { key?: string; fields?: { status?: { name?: string } } }[])
         .find((issue) => issue.key === key)?.fields?.status?.name;
+      const current =
+        fromPayload ??
+        issuesToBoard(epicsPayload).epics.find((epic) => epic.key === key)?.status ??
+        app.board().epics.find((epic) => epic.key === key)?.status;
       if (current === status) {
         return { ok: true, noop: true, board: app.board() };
       }

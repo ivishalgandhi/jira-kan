@@ -5,6 +5,7 @@ export type Epic = {
   priority?: string;
   assignee?: string;
   dueDate?: string;
+  labels?: string[];
 };
 
 export type Card = {
@@ -24,10 +25,11 @@ export type Column = {
   title: string;
   cards: Card[];
 };
-
 export type Board = {
   columns: Column[];
   epics: Epic[];
+  children?: Record<string, Card[]>;
+  error?: string;
 };
 
 export type RawIssue = {
@@ -41,6 +43,7 @@ export type RawIssue = {
     issuetype?: { name?: unknown };
     issueType?: { name?: unknown };
     parent?: { key?: unknown };
+    "Epic Link"?: unknown;
     labels?: unknown;
     components?: unknown;
     created?: unknown;
@@ -91,7 +94,14 @@ function issueType(fields: RawIssue["fields"]): string | undefined {
 }
 
 function epicKey(fields: RawIssue["fields"]): string | undefined {
-  return typeof fields?.parent?.key === "string" ? fields.parent.key : undefined;
+  if (typeof fields?.parent?.key === "string") return fields.parent.key;
+  const link = fields?.["Epic Link"];
+  if (typeof link === "string" && link) return link;
+  if (link && typeof link === "object" && "key" in link) {
+    const key = (link as { key?: unknown }).key;
+    if (typeof key === "string" && key) return key;
+  }
+  return undefined;
 }
 
 function labelName(item: unknown): string | undefined {
@@ -139,6 +149,7 @@ function toEpic(face: {
   priority?: string;
   assignee?: string;
   dueDate?: string;
+  labels?: string[];
 }): Epic {
   return {
     key: face.key,
@@ -147,6 +158,7 @@ function toEpic(face: {
     ...(face.priority ? { priority: face.priority } : {}),
     ...(face.assignee ? { assignee: face.assignee } : {}),
     ...(face.dueDate ? { dueDate: face.dueDate } : {}),
+    ...(face.labels ? { labels: face.labels } : {}),
   };
 }
 

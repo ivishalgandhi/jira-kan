@@ -26,7 +26,7 @@ test("groups Issues into Columns by first-seen status", () => {
     "In Progress",
     "Done",
   ]);
-  expect(board.epics.map((epic) => epic.key)).toEqual(["DEMO-1"]);
+  expect(board.epics.map((epic) => epic.key)).toEqual(["DEMO-1", "DEMO-8"]);
   expect(board.columns[0].cards.map((card) => card.key)).toEqual([
     "DEMO-2",
     "DEMO-4",
@@ -45,6 +45,7 @@ test("Epics leave the Board and children keep the Epic key", () => {
     priority: "High",
     assignee: "Person A",
     dueDate: "Sep 10, 2026",
+    labels: ["kanban"],
   });
   expect(board.columns[1].cards[0]).toEqual({
     key: "DEMO-3",
@@ -89,6 +90,41 @@ test("Cards keep labels from the payload", () => {
   expect(board.columns[0].cards[0].labels).toEqual(["kanban", "scope"]);
   expect(board.columns[0].cards[1].labels).toBeUndefined();
   expect(board.columns[0].cards[2].labels).toEqual(["parser", "cli"]);
+});
+
+test("Epics keep labels the same way Cards do", () => {
+  const board = issuesToBoard([
+    {
+      key: "DEMO-1",
+      fields: {
+        summary: "Ship",
+        status: { name: "In Progress" },
+        issuetype: { name: "Epic" },
+        labels: ["kanban", "scope"],
+      },
+    },
+    {
+      key: "DEMO-8",
+      fields: {
+        summary: "Bare",
+        status: { name: "Done" },
+        issuetype: { name: "Epic" },
+        labels: [],
+      },
+    },
+    {
+      key: "DEMO-9",
+      fields: {
+        summary: "Components only",
+        status: { name: "To Do" },
+        issuetype: { name: "Epic" },
+        components: [{ name: "parser" }, { name: "cli" }],
+      },
+    },
+  ]);
+  expect(board.epics[0].labels).toEqual(["kanban", "scope"]);
+  expect(board.epics[1].labels).toBeUndefined();
+  expect(board.epics[2].labels).toEqual(["parser", "cli"]);
 });
 
 test("Cards keep assignee from displayName, name, or string", () => {
@@ -188,6 +224,20 @@ test("hides a status that has no Issues", () => {
   ]);
 
   expect(board.columns.map((column) => column.title)).toEqual(["To Do"]);
+});
+
+test("Cards keep an Epic key from Epic Link", () => {
+  const board = issuesToBoard([
+    {
+      key: "DEMO-2",
+      fields: {
+        summary: "Linked",
+        status: { name: "To Do" },
+        "Epic Link": "DEMO-1",
+      },
+    },
+  ]);
+  expect(board.columns[0].cards[0].epic).toBe("DEMO-1");
 });
 
 test("a child without parent has no Epic key", () => {

@@ -33,7 +33,7 @@ export async function createBoardApp(opts: {
     app.hydrate(opts.raw);
   } else {
     const local = createStoreCli(store);
-    app.hydrate(JSON.parse(await local.list(app.flags)));
+    app.hydrate(JSON.parse(await local.list(app.flags)), { fromStore: true });
   }
   return { app, store, kind: bin ? "jira" : "store" };
 }

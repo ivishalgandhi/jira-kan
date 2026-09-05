@@ -25,7 +25,7 @@ A Jira project identified by its key. The Board shows one Project at a time.
 _Avoid_: repo, codebase (those are this tool)
 
 **Epic**:
-An Issue of type Epic. It lives in the left pane. The pane lists every Epic from `jira issue list -tEpic`, not only those in the current Scope, grouped by status. Click a status to expand or collapse that group. Its children appear on the Board as Cards when the Scope includes them. Clicking an Epic shows only its children. If the list payload has no Epic link, children are fetched with `parent` or `Epic Link`.
+An Issue of type Epic. It lives in the left pane, listed from `jira issue list -tEpic` (not only Scope), grouped by status, and can carry labels, assignee, and priority. The row number is every non-Epic child, including those outside Scope; children appear on the Board only when Scope includes them, and clicking the Epic shows only those children.
 _Avoid_: parent (jira-cli's `-P` flag name)
 
 **Favourite**:
@@ -41,12 +41,12 @@ The jira-cli list invocation that fills the Board. The default Scope is the curr
 _Avoid_: filter, view, query (when meaning this)
 
 **Search**:
-Typing in the header that hides Epics and Cards that do not match. It does not change Scope or Refresh Jira.
+Typing in the header that hides Epics and Cards that do not match. An Epic matches on key, summary, and labels, or when a child matches. It does not change Scope or Refresh Jira.
 _Avoid_: filter, query (when meaning this)
 
 **Filter**:
-Persisted Board controls that hide Cards without changing Scope or Refresh.
-_Avoid_: Search, Scope, Sort, query (when meaning this)
+Persisted Board controls that hide Cards without changing Scope or Refresh. An Epic row stays when the Epic's own field matches or a remaining child matches; it hides when neither does.
+_Avoid_: Search, Scope, Sort, query
 
 **Sort**:
 Persisted order of Cards inside each Column.
@@ -65,8 +65,8 @@ Re-running jira-cli from the UI to replace the Issues on the Board.
 _Avoid_: sync, reload (when meaning that action)
 
 **Move**:
-Changing an Issue's status from the Board by running `jira issue move`. The only Write-back in the first release. A drop on the same Column does nothing.
-_Avoid_: transition, drag (the gesture), update
+Changing an Issue's status by running `jira issue move`. A Card is Moved by dropping it on a Column; an Epic is Moved from its row menu. The only Write-back in the first release. Dropping a Card on the same Column, or picking the Epic's current status, does nothing.
+_Avoid_: transition, drag (the gesture), update, file (putting a Favourite in a Folder)
 
 **Open**:
 Showing an Issue's details and Jira URL in the side pane. `jira open KEY` still resolves that URL. Same-origin pages embed; remote Jira is a link because it refuses frames.

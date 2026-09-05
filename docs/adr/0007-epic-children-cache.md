@@ -1,0 +1,3 @@
+# Epic children cache is for the pane, not the Board
+
+Refresh lists every Epic (`-tEpic`) and, in one extra jira-cli call, every non-Epic child of those keys. The left-pane count and Filter/Search hide-row use that cache. The Board still shows only Scope. Fixture and the store adapter fill the cache from the in-process store at hydrate so first paint matches Refresh; a Pipe stays Scope-only until Refresh. If the children call fails, the Board stays and counts fall back to Scope Cards. Merging those children into Columns would leak Scope; fetching per Epic on click leaves the number wrong until select.

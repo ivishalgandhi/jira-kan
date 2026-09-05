@@ -112,6 +112,14 @@ export class IssueStore {
     return this.issues.filter((issue) => matchJql(issue, jql));
   }
 
+  childrenOf(keys: string[]): StoredIssue[] {
+    const listed = new Set(keys);
+    return this.issues.filter((issue) => {
+      if (fieldValue(issue, "type").toLowerCase() === "epic") return false;
+      return listed.has(fieldValue(issue, "parent"));
+    });
+  }
+
   transitions(key: string) {
     const issue = this.get(key);
     if (!issue) return [];

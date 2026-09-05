@@ -204,5 +204,33 @@
       "created": "2026-09-02T15:00:00.000+0000",
       "updated": "2026-09-02T15:00:00.000+0000"
     }
+  },
+  {
+    "key": "DEMO-8",
+    "fields": {
+      "summary": "Already an Epic in Done",
+      "description": "Second Epic so DEMO-1 can Move locally.",
+      "labels": [],
+      "issueType": {
+        "name": "Epic"
+      },
+      "issuetype": {
+        "name": "Epic"
+      },
+      "status": {
+        "name": "Done"
+      },
+      "priority": {
+        "name": "Low"
+      },
+      "reporter": {
+        "displayName": "Person A"
+      },
+      "created": "2026-08-01T09:00:00.000+0000",
+      "updated": "2026-08-28T09:00:00.000+0000",
+      "resolution": {
+        "name": "Done"
+      }
+    }
   }
 ]

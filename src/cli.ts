@@ -9,6 +9,7 @@ export type Cli = {
   list(flags: string): Promise<string>;
   listEpics(): Promise<string>;
   listEpic(key: string): Promise<string>;
+  listChildren(keys: string[]): Promise<string>;
   move(key: string, status: string): Promise<{ ok: boolean; error?: string }>;
   open(key: string): Promise<string>;
   view(key: string): Promise<string>;
@@ -31,6 +32,9 @@ export function createStoreCli(store: IssueStore): Cli {
     async listEpic(key) {
       const issues = store.list(`project="DEMO" AND parent="${key}"`);
       return JSON.stringify(issues, null, 2);
+    },
+    async listChildren(keys) {
+      return JSON.stringify(store.childrenOf(keys), null, 2);
     },
     async move(key, status) {
       return store.move(key, status);
@@ -121,6 +125,23 @@ export function createJiraCli(
         "list",
         "-q",
         `parent="${key}" OR "Epic Link"="${key}"`,
+        "--raw",
+      ]);
+      if (result.code !== 0) {
+        const text = result.stderr || result.stdout || "jira issue list failed";
+        if (emptyList(text)) return "[]";
+        throw new Error(text);
+      }
+      return result.stdout;
+    },
+    async listChildren(keys) {
+      if (!keys.length) return "[]";
+      const list = keys.map((key) => `"${key}"`).join(", ");
+      const result = await run([
+        "issue",
+        "list",
+        "-q",
+        `parent in (${list}) OR "Epic Link" in (${list})`,
         "--raw",
       ]);
       if (result.code !== 0) {

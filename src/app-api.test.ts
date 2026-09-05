@@ -54,6 +54,7 @@ test("default Board is the Project", async () => {
   ).toEqual(["DEMO-2", "DEMO-4", "DEMO-6", "DEMO-3", "DEMO-5"]);
   expect(board.epics.map((epic: { key: string }) => epic.key)).toEqual([
     "DEMO-1",
+    "DEMO-8",
   ]);
 });
 
@@ -143,6 +144,7 @@ test("Open keeps the URL and an error when view fails", async () => {
     list: async () => JSON.stringify(fixture),
     listEpics: async () => "[]",
     listEpic: async () => "[]",
+    listChildren: async () => "[]",
     move: async () => ({ ok: true }),
     open: async (key) => `/browse/${key}`,
     view: async () => {
@@ -217,6 +219,9 @@ test("Board.epics come from the Epic list, not only Scope", async () => {
     async listEpic() {
       return "[]";
     },
+    async listChildren() {
+      return "[]";
+    },
     async move() {
       return { ok: true };
     },
@@ -233,4 +238,336 @@ test("Board.epics come from the Epic list, not only Scope", async () => {
     "SQLJIRA-1",
     "SQLJIRA-9",
   ]);
+});
+
+function childKeys(board: { children?: Record<string, { key: string }[]> }) {
+  return Object.values(board.children ?? {})
+    .flat()
+    .map((card) => card.key)
+    .sort();
+}
+
+test("store hydrate fills the children cache", () => {
+  const raw = [
+    {
+      key: "DEMO-1",
+      fields: {
+        summary: "Epic",
+        status: { name: "To Do" },
+        issuetype: { name: "Epic" },
+      },
+    },
+    {
+      key: "DEMO-2",
+      fields: {
+        summary: "In scope",
+        status: { name: "To Do" },
+        issuetype: { name: "Story" },
+        parent: { key: "DEMO-1" },
+      },
+    },
+    {
+      key: "DEMO-3",
+      fields: {
+        summary: "Outside scope",
+        status: { name: "Done" },
+        issuetype: { name: "Story" },
+        parent: { key: "DEMO-1" },
+      },
+    },
+  ];
+  const app = createApp({ store: IssueStore.fromRaw(raw) });
+  const board = app.hydrate([raw[1]], { fromStore: true });
+  expect(board.columns.flatMap((column) => column.cards.map((card) => card.key))).toEqual(["DEMO-2"]);
+  expect(childKeys(board)).toEqual(["DEMO-2", "DEMO-3"]);
+});
+
+test("Pipe hydrate has no children cache", () => {
+  const app = createApp({ store: IssueStore.fromRaw(fixture) });
+  const board = app.hydrate(fixture);
+  expect(board.children).toBeUndefined();
+});
+
+test("Refresh fills the children cache from one batched list", async () => {
+  const calls: string[][] = [];
+  const cli: Cli = {
+    async list() {
+      calls.push(["list"]);
+      return JSON.stringify([
+        {
+          key: "DEMO-2",
+          fields: {
+            summary: "In scope",
+            status: { name: "To Do" },
+            issuetype: { name: "Story" },
+            parent: { key: "DEMO-1" },
+          },
+        },
+      ]);
+    },
+    async listEpics() {
+      calls.push(["listEpics"]);
+      return JSON.stringify([
+        {
+          key: "DEMO-1",
+          fields: {
+            summary: "Epic",
+            status: { name: "To Do" },
+            issuetype: { name: "Epic" },
+          },
+        },
+      ]);
+    },
+    async listEpic() {
+      calls.push(["listEpic"]);
+      return "[]";
+    },
+    async listChildren(keys) {
+      calls.push(["listChildren", ...keys]);
+      return JSON.stringify([
+        {
+          key: "DEMO-2",
+          fields: {
+            summary: "In scope",
+            status: { name: "To Do" },
+            issuetype: { name: "Story" },
+            parent: { key: "DEMO-1" },
+          },
+        },
+        {
+          key: "DEMO-3",
+          fields: {
+            summary: "Outside scope",
+            status: { name: "Done" },
+            issuetype: { name: "Story" },
+            parent: { key: "DEMO-1" },
+          },
+        },
+      ]);
+    },
+    async move() {
+      return { ok: true };
+    },
+    async open() {
+      return "/browse/X";
+    },
+    async view() {
+      return JSON.stringify({ key: "X", fields: {} });
+    },
+  };
+  const { base } = await listen(IssueStore.fromRaw(fixture), cli);
+  const board = await (await fetch(`${base}/api/board`)).json();
+  expect(board.columns.flatMap((c: { cards: { key: string }[] }) => c.cards.map((card) => card.key))).toEqual([
+    "DEMO-2",
+  ]);
+  expect(childKeys(board)).toEqual(["DEMO-2", "DEMO-3"]);
+  expect(calls.filter((call) => call[0] === "listChildren")).toEqual([["listChildren", "DEMO-1"]]);
+  expect(calls.filter((call) => call[0] === "listEpic")).toEqual([]);
+});
+
+test("a failed children call keeps the Board and falls counts back", async () => {
+  const cli: Cli = {
+    async list() {
+      return JSON.stringify([
+        {
+          key: "DEMO-2",
+          fields: {
+            summary: "In scope",
+            status: { name: "To Do" },
+            issuetype: { name: "Story" },
+            parent: { key: "DEMO-1" },
+          },
+        },
+      ]);
+    },
+    async listEpics() {
+      return JSON.stringify([
+        {
+          key: "DEMO-1",
+          fields: {
+            summary: "Epic",
+            status: { name: "To Do" },
+            issuetype: { name: "Epic" },
+          },
+        },
+      ]);
+    },
+    async listEpic() {
+      return "[]";
+    },
+    async listChildren() {
+      throw new Error("children list failed");
+    },
+    async move() {
+      return { ok: true };
+    },
+    async open() {
+      return "/browse/X";
+    },
+    async view() {
+      return JSON.stringify({ key: "X", fields: {} });
+    },
+  };
+  const { base } = await listen(IssueStore.fromRaw(fixture), cli);
+  const board = await (await fetch(`${base}/api/board`)).json();
+  expect(board.columns.flatMap((c: { cards: { key: string }[] }) => c.cards.map((card) => card.key))).toEqual([
+    "DEMO-2",
+  ]);
+  expect(board.children).toBeUndefined();
+  expect(board.error).toBe("children list failed");
+});
+
+test("select stamps cached children without a second list", async () => {
+  const calls: string[] = [];
+  const cli: Cli = {
+    async list() {
+      return JSON.stringify([]);
+    },
+    async listEpics() {
+      return JSON.stringify([
+        {
+          key: "DEMO-1",
+          fields: {
+            summary: "Epic",
+            status: { name: "To Do" },
+            issuetype: { name: "Epic" },
+          },
+        },
+      ]);
+    },
+    async listEpic() {
+      calls.push("listEpic");
+      return "[]";
+    },
+    async listChildren() {
+      return JSON.stringify([
+        {
+          key: "DEMO-9",
+          fields: {
+            summary: "Cached",
+            status: { name: "To Do" },
+            issuetype: { name: "Story" },
+            parent: { key: "DEMO-1" },
+          },
+        },
+      ]);
+    },
+    async move() {
+      return { ok: true };
+    },
+    async open() {
+      return "/browse/X";
+    },
+    async view() {
+      return JSON.stringify({ key: "X", fields: {} });
+    },
+  };
+  const { base } = await listen(IssueStore.fromRaw(fixture), cli);
+  const res = await fetch(`${base}/api/epic`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key: "DEMO-1" }),
+  });
+  const body = await res.json();
+  expect(
+    body.columns.flatMap((c: { cards: { key: string; epic?: string }[] }) =>
+      c.cards.map((card) => [card.key, card.epic]),
+    ),
+  ).toEqual([["DEMO-9", "DEMO-1"]]);
+  expect(calls).toEqual([]);
+});
+
+test("same-status Epic Move is a no-op", async () => {
+  const { base } = await listen();
+  const res = await fetch(`${base}/api/move`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key: "DEMO-1", status: "In Progress" }),
+  });
+  const body = await res.json();
+  expect(body.ok).toBe(true);
+  expect(body.noop).toBe(true);
+});
+
+test("Epic Move Refreshes and leaves children on the Board", async () => {
+  const { base } = await listen();
+  const res = await fetch(`${base}/api/move`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key: "DEMO-1", status: "Done" }),
+  });
+  const body = await res.json();
+  expect(body.ok).toBe(true);
+  expect(body.board.epics.find((epic: { key: string }) => epic.key === "DEMO-1")?.status).toBe("Done");
+  expect(
+    body.board.columns.flatMap((c: { cards: { key: string }[] }) => c.cards.map((card) => card.key)),
+  ).toEqual(["DEMO-2", "DEMO-4", "DEMO-6", "DEMO-3", "DEMO-5"]);
+});
+
+test("Fixture lists a second Epic in Done", async () => {
+  const { base } = await listen();
+  const board = await (await fetch(`${base}/api/board`)).json();
+  expect(
+    board.epics.map((epic: { key: string; status?: string }) => [epic.key, epic.status]),
+  ).toEqual([
+    ["DEMO-1", "In Progress"],
+    ["DEMO-8", "Done"],
+  ]);
+});
+
+test("same-status Epic Move noops when the Epic is only listed", async () => {
+  let moved = 0;
+  const cli: Cli = {
+    async list() {
+      return JSON.stringify([
+        {
+          key: "DEMO-2",
+          fields: {
+            summary: "Story",
+            status: { name: "To Do" },
+            issuetype: { name: "Story" },
+            parent: { key: "DEMO-1" },
+          },
+        },
+      ]);
+    },
+    async listEpics() {
+      return JSON.stringify([
+        {
+          key: "DEMO-1",
+          fields: {
+            summary: "Epic",
+            status: { name: "In Progress" },
+            issuetype: { name: "Epic" },
+          },
+        },
+      ]);
+    },
+    async listEpic() {
+      return "[]";
+    },
+    async listChildren() {
+      return "[]";
+    },
+    async move() {
+      moved += 1;
+      return { ok: true };
+    },
+    async open() {
+      return "/browse/X";
+    },
+    async view() {
+      return JSON.stringify({ key: "X", fields: {} });
+    },
+  };
+  const { base } = await listen(IssueStore.fromRaw(fixture), cli);
+  const res = await fetch(`${base}/api/move`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key: "DEMO-1", status: "In Progress" }),
+  });
+  const body = await res.json();
+  expect(body.ok).toBe(true);
+  expect(body.noop).toBe(true);
+  expect(moved).toBe(0);
 });

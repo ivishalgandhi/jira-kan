@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 import type { Card, Epic } from "./board.ts";
 import {
   addFolder,
+  epicChildCount,
   favouriteGroup,
   filterEpics,
   filterFacets,
@@ -141,6 +142,74 @@ test("Search keeps an Epic that matches or has a matching Card", () => {
   ]);
 });
 
+test("Search keeps an Epic whose labels match", () => {
+  const labeledEpic: Epic = { key: "DEMO-1", summary: "Ship", labels: ["kanban"] };
+  expect(filterEpics([labeledEpic, otherEpic], [child], "kanban")).toEqual([labeledEpic]);
+});
+
+test("Filter keeps an Epic whose own labels match", () => {
+  const labeledEpic: Epic = { key: "DEMO-1", summary: "Ship", labels: ["kanban"] };
+  const otherChild: Card = { key: "DEMO-10", summary: "plain", epic: "DEMO-9" };
+  expect(
+    filterEpics([labeledEpic, otherEpic], [child, otherChild], "", { labels: ["kanban"] }),
+  ).toEqual([labeledEpic]);
+});
+
+test("Filter keeps an Epic when a remaining child matches", () => {
+  const parent: Epic = { key: "DEMO-1", summary: "Ship" };
+  const otherChild: Card = { key: "DEMO-10", summary: "plain", epic: "DEMO-9" };
+  expect(filterEpics([parent, otherEpic], [labeled, otherChild], "", { labels: ["kanban"] })).toEqual([
+    parent,
+  ]);
+});
+
+test("Filter hides an Epic when neither self nor child matches", () => {
+  const parent: Epic = { key: "DEMO-1", summary: "Ship" };
+  const otherChild: Card = { key: "DEMO-10", summary: "plain", epic: "DEMO-9" };
+  expect(
+    filterEpics([parent, otherEpic], [child, otherChild], "", { labels: ["kanban"] }),
+  ).toEqual([]);
+});
+
+test("Filter keeps an Epic with no children", () => {
+  const bare: Epic = { key: "DEMO-8", summary: "Bare" };
+  expect(filterEpics([bare], [], "", { labels: ["kanban"] })).toEqual([bare]);
+});
+
+test("Filter keeps an Epic whose own priority or assignee matches", () => {
+  const highEpic: Epic = { key: "DEMO-1", summary: "Ship", priority: "High" };
+  const assignedEpic: Epic = { key: "DEMO-9", summary: "Other", assignee: "Pat" };
+  const highChild: Card = { key: "DEMO-2", summary: "low", epic: "DEMO-1", priority: "Low" };
+  const patChild: Card = { key: "DEMO-10", summary: "plain", epic: "DEMO-9", assignee: "Ada" };
+  expect(filterEpics([highEpic, assignedEpic], [highChild, patChild], "", { priority: ["High"] })).toEqual([
+    highEpic,
+  ]);
+  expect(filterEpics([highEpic, assignedEpic], [highChild, patChild], "", { assignee: ["Pat"] })).toEqual([
+    assignedEpic,
+  ]);
+});
+
+test("epicAssignee Filter hides an Epic that misses and has no remaining child", () => {
+  const patEpic: Epic = { key: "DEMO-1", summary: "Ship", assignee: "Pat" };
+  const adaEpic: Epic = { key: "DEMO-9", summary: "Other", assignee: "Ada" };
+  const patChild: Card = { key: "DEMO-2", summary: "child", epic: "DEMO-1" };
+  const adaChild: Card = { key: "DEMO-10", summary: "plain", epic: "DEMO-9" };
+  expect(
+    filterEpics([patEpic, adaEpic], [patChild, adaChild], "", { epicAssignee: ["Pat"] }),
+  ).toEqual([patEpic]);
+});
+
+test("Epic row count is remaining children after Search and Filter", () => {
+  const kids: Card[] = [
+    { key: "DEMO-2", summary: "parse", epic: "DEMO-1", labels: ["kanban"] },
+    { key: "DEMO-3", summary: "drag", epic: "DEMO-1", labels: ["scope"] },
+    { key: "DEMO-4", summary: "other", epic: "DEMO-8" },
+  ];
+  expect(epicChildCount(kids, "DEMO-1")).toBe(2);
+  expect(epicChildCount(kids, "DEMO-1", "parse")).toBe(1);
+  expect(epicChildCount(kids, "DEMO-1", "", { labels: ["kanban"] })).toBe(1);
+});
+
 test("left pane keeps In Progress, Completed, and Cancelled Epics", () => {
   const open: Epic = { key: "DEMO-1", summary: "Open", status: "To Do" };
   const progress: Epic = { key: "DEMO-8", summary: "Busy", status: "In Progress" };
@@ -262,7 +331,23 @@ test("Filter facets include Labels and Epic assignee", () => {
       group: "Assignee",
       values: ["Pat", "Unassigned"],
     },
-    { key: "assignee", label: "Stories", group: "Assignee", values: ["Ada", "Unassigned"] },
+    { key: "assignee", label: "Stories", group: "Assignee", values: ["Ada", "Pat", "Unassigned"] },
+    { key: "labels", label: "Labels", group: "Labels", values: ["kanban", "scope"] },
+  ]);
+});
+
+test("Filter facets union Card values with listed Epic values", () => {
+  expect(
+    filterFacets(
+      [{ key: "A", summary: "a", priority: "Low", assignee: "Ada", labels: ["scope"] }],
+      [
+        { key: "E1", summary: "One", priority: "High", assignee: "Pat", labels: ["kanban"] },
+        { key: "E2", summary: "Two" },
+      ],
+    ),
+  ).toEqual([
+    { key: "priority", label: "Priority", group: "Priority", values: ["High", "Low"] },
+    { key: "assignee", label: "Stories", group: "Assignee", values: ["Ada", "Pat", "Unassigned"] },
     { key: "labels", label: "Labels", group: "Labels", values: ["kanban", "scope"] },
   ]);
 });
@@ -516,4 +601,39 @@ test("toggleFavourite does not invent a Folder home", () => {
   expect(
     toggleFavourite({ keys: ["DEMO-1"], folders: [{ name: "Now", keys: ["DEMO-1"] }] }, "DEMO-1"),
   ).toEqual({ keys: [], folders: [{ name: "Now", keys: [] }] });
+});
+
+test("Favourites hide under the same Filter as status-group Epics", () => {
+  const labeledEpic: Epic = { key: "DEMO-1", summary: "Ship", labels: ["kanban"] };
+  const otherFav: Epic = { key: "DEMO-9", summary: "Other" };
+  const otherChild: Card = { key: "DEMO-10", summary: "plain", epic: "DEMO-9" };
+  expect(
+    favouriteGroup(
+      [labeledEpic, otherFav],
+      ["DEMO-1", "DEMO-9"],
+      "",
+      [child, otherChild],
+      { labels: ["kanban"] },
+    ),
+  ).toEqual([labeledEpic]);
+});
+
+test("an empty Folder stays after Filter hides its Favourites", () => {
+  const created = addFolder({ keys: ["DEMO-9"], folders: [] }, "Later");
+  expect(created.ok).toBe(true);
+  if (!created.ok) return;
+  const state = moveFavourite(created.state, "DEMO-9", "Later");
+  const otherChild: Card = { key: "DEMO-10", summary: "plain", epic: "DEMO-9" };
+  expect(
+    listedFavourites(
+      [{ key: "DEMO-9", summary: "Other" }],
+      state,
+      "",
+      [otherChild],
+      { labels: ["kanban"] },
+    ),
+  ).toEqual({
+    unfiled: [],
+    folders: [{ name: "Later", epics: [] }],
+  });
 });

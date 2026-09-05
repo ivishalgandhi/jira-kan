@@ -57,7 +57,7 @@ export function cardMatches(card: Card, query: string) {
 
 export function epicMatches(epic: Epic, query: string) {
   const q = needle(query);
-  return !q || `${epic.key}\n${epic.summary}`.toLowerCase().includes(q);
+  return !q || `${epic.key}\n${epic.summary}\n${(epic.labels ?? []).join("\n")}`.toLowerCase().includes(q);
 }
 
 export function priorityRank(priority?: string): number {
@@ -133,9 +133,10 @@ function peopleFacet(
 
 export function filterFacets(cards: Card[], epics: Epic[] = []): FilterFacet[] {
   const facets: FilterFacet[] = [];
-  const priorities = cards
-    .map((card) => card.priority)
-    .filter((value): value is string => Boolean(value));
+  const priorities = [
+    ...cards.map((card) => card.priority),
+    ...epics.map((epic) => epic.priority),
+  ].filter((value): value is string => Boolean(value));
   if (priorities.length) {
     facets.push({
       key: "priority",
@@ -158,17 +159,21 @@ export function filterFacets(cards: Card[], epics: Epic[] = []): FilterFacet[] {
     cards.some((card) => !byKey.get(card.epic ?? "")?.assignee),
   );
   if (epicFacet) facets.push(epicFacet);
-  const assignees = cards
-    .map((card) => card.assignee)
-    .filter((value): value is string => Boolean(value));
+  const assignees = [
+    ...cards.map((card) => card.assignee),
+    ...epics.map((epic) => epic.assignee),
+  ].filter((value): value is string => Boolean(value));
   const storyFacet = peopleFacet(
     "assignee",
     "Stories",
     assignees,
-    cards.some((card) => !card.assignee),
+    cards.some((card) => !card.assignee) || epics.some((epic) => !epic.assignee),
   );
   if (storyFacet) facets.push(storyFacet);
-  const labels = cards.flatMap((card) => card.labels ?? []);
+  const labels = [
+    ...cards.flatMap((card) => card.labels ?? []),
+    ...epics.flatMap((epic) => epic.labels ?? []),
+  ];
   if (labels.length) {
     facets.push({
       key: "labels",
@@ -249,13 +254,72 @@ export function filterValue(
   );
 }
 
-export function filterEpics(epics: Epic[], cards: Card[], query: string) {
-  if (!needle(query)) return epics;
-  return epics.filter(
-    (epic) =>
-      epicMatches(epic, query) ||
-      cards.some((card) => card.epic === epic.key && cardMatches(card, query)),
+function epicValues(epic: Epic, field: string): string[] {
+  if (field === "assignee" || field === "epicAssignee") return [epic.assignee ?? "Unassigned"];
+  if (field === "priority") return epic.priority ? [epic.priority] : [];
+  if (field === "labels") return epic.labels ?? [];
+  return [];
+}
+
+function epicMatchesFilter(epic: Epic, filter?: BoardFilter) {
+  if (!hasFilter(filter)) return true;
+  return Object.entries(filter!).every(
+    ([field, selected]) =>
+      !selected.length || epicValues(epic, field).some((value) => selected.includes(value)),
   );
+}
+
+function remainingChildren(
+  epic: Epic,
+  cards: Card[],
+  query: string,
+  filter?: BoardFilter,
+  epics?: Epic[],
+) {
+  return cards.filter(
+    (card) =>
+      card.epic === epic.key &&
+      cardMatches(card, query) &&
+      cardMatchesFilter(card, filter, epics),
+  );
+}
+
+function epicRowVisible(
+  epic: Epic,
+  cards: Card[],
+  query: string,
+  filter?: BoardFilter,
+  epics?: Epic[],
+) {
+  const kids = cards.filter((card) => card.epic === epic.key);
+  const searchHit =
+    !needle(query) ||
+    epicMatches(epic, query) ||
+    kids.some((card) => cardMatches(card, query));
+  if (!searchHit) return false;
+  if (!hasFilter(filter)) return true;
+  if (kids.length === 0) return true;
+  return epicMatchesFilter(epic, filter) || remainingChildren(epic, cards, query, filter, epics).length > 0;
+}
+
+export function epicChildCount(
+  cards: Card[],
+  key: string,
+  query = "",
+  filter?: BoardFilter,
+  epics?: Epic[],
+) {
+  return remainingChildren({ key, summary: "" }, cards, query, filter, epics).length;
+}
+
+export function filterEpics(
+  epics: Epic[],
+  cards: Card[],
+  query: string,
+  filter?: BoardFilter,
+) {
+  if (!needle(query) && !hasFilter(filter)) return epics;
+  return epics.filter((epic) => epicRowVisible(epic, cards, query, filter, epics));
 }
 
 export function groupEpics(epics: Epic[]): { status: string; epics: Epic[] }[] {
@@ -351,24 +415,18 @@ function folderOf(name: string, folders: FavouriteFolder[]) {
   return folders.find((folder) => folder.name.toLowerCase() === name.trim().toLowerCase());
 }
 
-function favouriteVisible(epic: Epic, query: string, cards: Card[]) {
-  return (
-    epicMatches(epic, query) ||
-    cards.some((card) => card.epic === epic.key && cardMatches(card, query))
-  );
-}
-
 export function listedFavourites(
   epics: Epic[],
   state: FavouriteState,
   query = "",
   cards: Card[] = [],
+  filter?: BoardFilter,
 ): { unfiled: Epic[]; folders: { name: string; epics: Epic[] }[] } {
   const filed = new Set(state.folders.flatMap((folder) => folder.keys));
   const byKey = new Map(epics.map((epic) => [epic.key, epic]));
   const unfiled = state.keys
     .map((key) => byKey.get(key))
-    .filter((epic): epic is Epic => !!epic && !filed.has(epic.key) && favouriteVisible(epic, query, cards))
+    .filter((epic): epic is Epic => !!epic && !filed.has(epic.key) && epicRowVisible(epic, cards, query, filter, epics))
     .sort(byPriorityThenKey);
   const folders = [...state.folders]
     .sort((a, b) => a.name.localeCompare(b.name))
@@ -376,15 +434,21 @@ export function listedFavourites(
       name: folder.name,
       epics: folder.keys
         .map((key) => byKey.get(key))
-        .filter((epic): epic is Epic => !!epic && favouriteVisible(epic, query, cards))
+        .filter((epic): epic is Epic => !!epic && epicRowVisible(epic, cards, query, filter, epics))
         .sort(byPriorityThenKey),
     }))
     .filter((folder) => !needle(query) || epicMatches({ key: "", summary: folder.name }, query) || folder.epics.length > 0);
   return { unfiled, folders };
 }
 
-export function favouriteGroup(epics: Epic[], keys: string[], query = "", cards: Card[] = []) {
-  return listedFavourites(epics, { keys, folders: [] }, query, cards).unfiled;
+export function favouriteGroup(
+  epics: Epic[],
+  keys: string[],
+  query = "",
+  cards: Card[] = [],
+  filter?: BoardFilter,
+) {
+  return listedFavourites(epics, { keys, folders: [] }, query, cards, filter).unfiled;
 }
 
 export function toggleFavourite(state: FavouriteState, key: string): FavouriteState {

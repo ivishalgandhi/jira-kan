@@ -131,6 +131,19 @@ test("createJiraCli lists Epic children with parent or Epic Link", async () => {
   ]);
 });
 
+test("createJiraCli lists children of every Epic in one call", async () => {
+  const { bin, calls } = fakeJira();
+  const cli = createJiraCli({ bin });
+  await cli.listChildren(["DEMO-1", "DEMO-8"]);
+  expect(calls()[0].args).toEqual([
+    "issue",
+    "list",
+    "-q",
+    'parent in ("DEMO-1", "DEMO-8") OR "Epic Link" in ("DEMO-1", "DEMO-8")',
+    "--raw",
+  ]);
+});
+
 test("createJiraCli does not force Fake Jira config or token", async () => {
   const { bin, calls } = fakeJira();
   const prevConfig = process.env.JIRA_CONFIG_FILE;
