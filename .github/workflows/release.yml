@@ -8,6 +8,7 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  id-token: write
 
 jobs:
   release:
@@ -17,6 +18,9 @@ jobs:
         with:
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
       - run: bun install --frozen-lockfile
       - run: bun audit --audit-level=high
       - run: bun test
@@ -24,8 +28,8 @@ jobs:
       - run: bun run build
       - uses: cycjimmy/semantic-release-action@v4
         with:
+          semantic_version: 25
           extra_plugins: |
             @semantic-release/git
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

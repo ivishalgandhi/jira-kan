@@ -14,7 +14,7 @@ Opens `http://127.0.0.1:5173`. No clone, no `bun install`. `bunx` / `npx` instal
 
 First paint is the Fixture. If `jira` is on PATH, the process then Refresh-es from your existing `jira init`. If not, Refresh and Move use the in-process store.
 
-Until npm has a release, from a clone: `bun run build && bun dist/pipe-kan.js`.
+The published CLI is on npm. From a clone: `bun run build && bun dist/pipe-kan.js`.
 
 - Left: Epics. Center: Cards (one Column per status in the payload). Right: Open URL; remote Jira is a link, not an iframe.
 - Drop a Card on a Column to Move (`jira issue move`).
@@ -87,6 +87,6 @@ Pushes to `main` run `bun audit --audit-level=high`, tests, then [semantic-relea
 | `feat!:` or `BREAKING CHANGE:` | major |
 | `docs:`, `chore:`, `test:` | none |
 
-It writes `package.json`, tags `vX.Y.Z`, and opens a GitHub Release. npm publish is wired (`bin`, `files`, `bun run build` on CI) and waits on repo secret `NPM_TOKEN`. After that secret exists, set `npmPublish` to `true` in `.releaserc.json`.
+It writes `package.json`, tags `vX.Y.Z`, opens a GitHub Release, and publishes to npm from this workflow via [trusted publishing](https://docs.npmjs.com/trusted-publishers/). No `NPM_TOKEN`. Provenance is attached automatically.
 
 First Board is tagged `v0.1.0`. Later `fix:` / `feat:` commits on `main` bump from there. Without a `v*` tag the first release is `1.0.0`.
