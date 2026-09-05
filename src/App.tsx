@@ -98,12 +98,26 @@ function applyTheme(theme: Theme) {
   localStorage.setItem("theme", theme);
 }
 
-function statusDot(title: string) {
+const STATUS_CIRCLE = {
+  done: "green",
+  complete: "green",
+  completed: "green",
+  closed: "green",
+  resolved: "green",
+  progress: "yellow",
+  review: "yellow",
+  doing: "yellow",
+  cancelled: "gray",
+  canceled: "gray",
+} as const;
+
+function statusCircle(title?: string) {
+  if (!title) return "var(--primary)";
   const value = title.toLowerCase();
-  if (/(done|complete|closed|resolved)/.test(value)) return "bg-emerald-500";
-  if (/(progress|review|doing)/.test(value)) return "bg-amber-400";
-  if (/(cancel)/.test(value)) return "bg-zinc-500";
-  return "bg-zinc-400";
+  const match = (Object.keys(STATUS_CIRCLE) as (keyof typeof STATUS_CIRCLE)[]).find(
+    (name) => value.includes(name),
+  );
+  return `var(--kanban-board-circle-${match ? STATUS_CIRCLE[match] : "gray"})`;
 }
 
 function priorityClass(priority?: string) {
@@ -143,21 +157,21 @@ function IssueCard({
       </div>
       <p className="mt-0.5 truncate text-[13px] leading-[18px]">{card.summary}</p>
       {card.priority || card.labels?.length || card.assignee || card.dueDate ? (
-        <div className="mt-auto flex items-center gap-1 pt-2">
+        <div className="mt-auto flex flex-wrap items-center gap-2 pt-2">
           {card.priority ? (
             <span
               className={cn(
-                "text-[11px] font-medium capitalize",
+                "inline-flex h-6 shrink-0 items-center rounded-full border px-2 text-[12px] font-medium capitalize",
                 priorityClass(card.priority),
               )}
             >
               {card.priority}
             </span>
           ) : null}
-          {card.labels?.slice(0, 2).map((label) => (
+          {card.labels?.map((label) => (
             <span
               key={label}
-              className="text-muted-foreground rounded-full border px-1.5 py-px text-[11px]"
+              className="text-muted-foreground inline-flex h-6 shrink-0 items-center rounded-full border px-2 text-[12px]"
             >
               {label}
             </span>
@@ -221,14 +235,15 @@ function StatusColumn({
         className={cn("flex h-full min-h-0 flex-col", !open && "h-auto")}
       >
         <div className={cn("flex flex-col", open ? "h-full min-h-0" : "h-auto")}>
-          <div className="flex h-10 items-center gap-2 px-3 pt-1">
+          <div className="flex items-center gap-2 px-3 pt-[13px] pb-5">
             <CollapsibleTrigger asChild>
               <button
                 type="button"
                 className="flex min-w-0 flex-1 items-center gap-2 text-left"
               >
                 <span
-                  className={cn("size-2 shrink-0 rounded-full", statusDot(title))}
+                  className="size-3.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: statusCircle(title) }}
                 />
                 <span className="truncate text-[13px] font-medium">{title}</span>
                 <span className="text-muted-foreground text-[12px] tabular-nums">
@@ -286,22 +301,24 @@ function EpicButton({
     <button
       type="button"
       className={cn(
-        "flex min-h-12 w-full flex-col justify-center gap-0.5 rounded-lg px-3 py-2 text-left",
+        "flex h-14 w-full items-center gap-3 rounded-lg px-3 text-left",
         selected
           ? "bg-sidebar-accent text-sidebar-accent-foreground"
           : "hover:bg-foreground/5",
       )}
       onClick={() => void onSelect(epic.key)}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-muted-foreground text-[11px] font-medium tabular-nums">
-          {epic.key}
-        </span>
-        <span className="text-muted-foreground text-[11px] tabular-nums">
-          {count}
-        </span>
-      </div>
-      <span className="line-clamp-1 text-[13px] leading-[18px]">{epic.summary}</span>
+      <span
+        className="size-2 shrink-0 rounded-full"
+        style={{ backgroundColor: statusCircle(epic.status) }}
+      />
+      <span className="min-w-0 flex-1 truncate text-[13px] leading-[18px]">
+        {epic.summary}
+      </span>
+      <span className="text-muted-foreground text-[11px] font-medium tabular-nums">
+        {epic.key}
+      </span>
+      <span className="text-muted-foreground text-[11px] tabular-nums">{count}</span>
     </button>
   );
 }
@@ -390,15 +407,15 @@ export function App() {
   );
   const epicGroups = useMemo(() => groupEpics(visibleEpics), [visibleEpics]);
   const columnIds = Object.keys(visible);
-  const workIds = openUrl ? ["board", "open"] : ["board"];
+  const boardOpenIds = openUrl ? ["cards", "open"] : ["cards"];
   const shellLayout = useDefaultLayout({
     id: "shell",
-    panelIds: ["epics", "work"],
+    panelIds: ["epics", "board"],
     onlySaveAfterUserInteractions: true,
   });
-  const workLayout = useDefaultLayout({
-    id: "work",
-    panelIds: workIds,
+  const boardOpenLayout = useDefaultLayout({
+    id: "board-open",
+    panelIds: boardOpenIds,
     onlySaveAfterUserInteractions: true,
   });
   const columnLayout = useDefaultLayout({
@@ -578,7 +595,7 @@ export function App() {
           </aside>
         </ResizablePanel>
         <ResizableHandle />
-        <ResizablePanel id="work" defaultSize="80%" minSize="24rem" className="min-h-0">
+        <ResizablePanel id="board" defaultSize="80%" minSize="24rem" className="min-h-0">
           <div className="flex h-full min-h-0 flex-col p-2 pl-0">
             <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
               <header className="flex min-h-11 shrink-0 flex-wrap items-center gap-2 px-3">
@@ -631,14 +648,14 @@ export function App() {
                 ) : null}
               </header>
               <ResizablePanelGroup
-                id="work"
+                id="board-open"
                 orientation="horizontal"
                 className="min-h-0 flex-1"
-                defaultLayout={workLayout.defaultLayout}
-                onLayoutChanged={workLayout.onLayoutChanged}
+                defaultLayout={boardOpenLayout.defaultLayout}
+                onLayoutChanged={boardOpenLayout.onLayoutChanged}
               >
                 <ResizablePanel
-                  id="board"
+                  id="cards"
                   defaultSize={openUrl ? "70%" : "100%"}
                   minSize="16rem"
                   className="min-h-0"
