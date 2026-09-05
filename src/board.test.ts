@@ -26,7 +26,7 @@ test("groups Issues into Columns by first-seen status", () => {
     "In Progress",
     "Done",
   ]);
-  expect(board.epics.map((epic) => epic.key)).toEqual(["DEMO-1", "DEMO-8"]);
+  expect(board.epics.map((epic) => epic.key)).toEqual(["DEMO-1", "DEMO-7", "DEMO-8"]);
   expect(board.columns[0].cards.map((card) => card.key)).toEqual([
     "DEMO-2",
     "DEMO-4",

@@ -54,6 +54,7 @@ test("default Board is the Project", async () => {
   ).toEqual(["DEMO-2", "DEMO-4", "DEMO-6", "DEMO-3", "DEMO-5"]);
   expect(board.epics.map((epic: { key: string }) => epic.key)).toEqual([
     "DEMO-1",
+    "DEMO-7",
     "DEMO-8",
   ]);
 });
@@ -504,15 +505,31 @@ test("Epic Move Refreshes and leaves children on the Board", async () => {
   ).toEqual(["DEMO-2", "DEMO-4", "DEMO-6", "DEMO-3", "DEMO-5"]);
 });
 
-test("Fixture lists a second Epic in Done", async () => {
+test("Fixture lists Epics in To Do, In Progress, and Done", async () => {
   const { base } = await listen();
   const board = await (await fetch(`${base}/api/board`)).json();
   expect(
     board.epics.map((epic: { key: string; status?: string }) => [epic.key, epic.status]),
   ).toEqual([
     ["DEMO-1", "In Progress"],
+    ["DEMO-7", "To Do"],
     ["DEMO-8", "Done"],
   ]);
+});
+
+test("Open returns the browse URL and fields for an Epic", async () => {
+  const { base } = await listen();
+  const res = await fetch(`${base}/api/open`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key: "DEMO-1" }),
+  });
+  const body = await res.json();
+  expect(body.url).toBe("/browse/DEMO-1");
+  expect(body.fields[0]).toEqual({ label: "Key", value: "DEMO-1" });
+  expect(body.fields.find((field: { label: string }) => field.label === "Summary")?.value).toBe(
+    "Ship a local kanban",
+  );
 });
 
 test("same-status Epic Move noops when the Epic is only listed", async () => {

@@ -69,7 +69,7 @@ Changing an Issue's status by running `jira issue move`. A Card is Moved by drop
 _Avoid_: transition, drag (the gesture), update, file (putting a Favourite in a Folder)
 
 **Open**:
-Showing an Issue's details and Jira URL in the side pane. `jira open KEY` still resolves that URL. Same-origin pages embed; remote Jira is a link because it refuses frames.
+Showing an Issue's details and Jira URL in the side pane. A Card Opens on click; an Epic Opens from its row menu. `jira open KEY` still resolves that URL. Same-origin pages embed; remote Jira is a link because it refuses frames.
 _Avoid_: view, browse (when meaning this)
 
 **Write-back**:
