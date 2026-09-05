@@ -43,6 +43,7 @@ export type RawIssue = {
     issuetype?: { name?: unknown };
     issueType?: { name?: unknown };
     parent?: { key?: unknown };
+    parentEpic?: unknown;
     "Epic Link"?: unknown;
     labels?: unknown;
     components?: unknown;
@@ -93,13 +94,28 @@ function issueType(fields: RawIssue["fields"]): string | undefined {
   return typeof name === "string" ? name : undefined;
 }
 
+function asIssueKey(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    const key = value.trim();
+    return /^[A-Za-z][A-Za-z0-9_]*-\d+$/.test(key) ? key : undefined;
+  }
+  if (value && typeof value === "object" && "key" in value) {
+    return asIssueKey((value as { key?: unknown }).key);
+  }
+  return undefined;
+}
+
 function epicKey(fields: RawIssue["fields"]): string | undefined {
-  if (typeof fields?.parent?.key === "string") return fields.parent.key;
-  const link = fields?.["Epic Link"];
-  if (typeof link === "string" && link) return link;
-  if (link && typeof link === "object" && "key" in link) {
-    const key = (link as { key?: unknown }).key;
-    if (typeof key === "string" && key) return key;
+  if (!fields) return undefined;
+  const named =
+    asIssueKey(fields.parent) ??
+    asIssueKey(fields.parentEpic) ??
+    asIssueKey(fields["Epic Link"]);
+  if (named) return named;
+  for (const [name, value] of Object.entries(fields)) {
+    if (!name.startsWith("customfield_")) continue;
+    const key = asIssueKey(value);
+    if (key) return key;
   }
   return undefined;
 }

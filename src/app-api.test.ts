@@ -418,6 +418,134 @@ test("a failed children call keeps the Board and falls counts back", async () =>
   expect(board.error).toBe("children list failed");
 });
 
+test("select falls back to listEpic when cached children lost their Epic key", async () => {
+  const calls: string[] = [];
+  const unmapped = [
+    {
+      key: "DEMO-9",
+      fields: {
+        summary: "Linked only in Jira",
+        status: { name: "To Do" },
+        issuetype: { name: "Story" },
+      },
+    },
+  ];
+  const cli: Cli = {
+    async list() {
+      return JSON.stringify([]);
+    },
+    async listEpics() {
+      return JSON.stringify([
+        {
+          key: "DEMO-1",
+          fields: {
+            summary: "Epic",
+            status: { name: "To Do" },
+            issuetype: { name: "Epic" },
+          },
+        },
+      ]);
+    },
+    async listEpic(key) {
+      calls.push(`listEpic:${key}`);
+      return JSON.stringify(unmapped);
+    },
+    async listChildren() {
+      calls.push("listChildren");
+      return JSON.stringify(unmapped);
+    },
+    async move() {
+      return { ok: true };
+    },
+    async open() {
+      return "/browse/X";
+    },
+    async view() {
+      return JSON.stringify({ key: "X", fields: {} });
+    },
+  };
+  const { base } = await listen(IssueStore.fromRaw(fixture), cli);
+  const board = await (await fetch(`${base}/api/board`)).json();
+  expect(childKeys(board)).toEqual(["DEMO-9"]);
+  expect(
+    Object.values(board.children ?? {})
+      .flat()
+      .map((card) => (card as { epic?: string }).epic),
+  ).toEqual(["DEMO-1"]);
+  const res = await fetch(`${base}/api/epic`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key: "DEMO-1" }),
+  });
+  const body = await res.json();
+  expect(
+    body.columns.flatMap((c: { cards: { key: string; epic?: string }[] }) =>
+      c.cards.map((card) => [card.key, card.epic]),
+    ),
+  ).toEqual([["DEMO-9", "DEMO-1"]]);
+  expect(calls.filter((call) => call.startsWith("listEpic"))).toEqual(["listEpic:DEMO-1"]);
+});
+
+test("select lists Epic children when the cache has none for that key", async () => {
+  const calls: string[] = [];
+  const cli: Cli = {
+    async list() {
+      return JSON.stringify([]);
+    },
+    async listEpics() {
+      return JSON.stringify([
+        {
+          key: "DEMO-1",
+          fields: {
+            summary: "Epic",
+            status: { name: "To Do" },
+            issuetype: { name: "Epic" },
+          },
+        },
+      ]);
+    },
+    async listEpic(key) {
+      calls.push(`listEpic:${key}`);
+      return JSON.stringify([
+        {
+          key: "DEMO-9",
+          fields: {
+            summary: "Outside the first page",
+            status: { name: "To Do" },
+            issuetype: { name: "Story" },
+            parent: { key: "DEMO-1" },
+          },
+        },
+      ]);
+    },
+    async listChildren() {
+      return JSON.stringify([]);
+    },
+    async move() {
+      return { ok: true };
+    },
+    async open() {
+      return "/browse/X";
+    },
+    async view() {
+      return JSON.stringify({ key: "X", fields: {} });
+    },
+  };
+  const { base } = await listen(IssueStore.fromRaw(fixture), cli);
+  const res = await fetch(`${base}/api/epic`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ key: "DEMO-1" }),
+  });
+  const body = await res.json();
+  expect(
+    body.columns.flatMap((c: { cards: { key: string; epic?: string }[] }) =>
+      c.cards.map((card) => [card.key, card.epic]),
+    ),
+  ).toEqual([["DEMO-9", "DEMO-1"]]);
+  expect(calls).toEqual(["listEpic:DEMO-1"]);
+});
+
 test("select stamps cached children without a second list", async () => {
   const calls: string[] = [];
   const cli: Cli = {

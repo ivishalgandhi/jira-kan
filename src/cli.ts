@@ -124,7 +124,7 @@ export function createJiraCli(
         "issue",
         "list",
         "-q",
-        `parent="${key}" OR "Epic Link"="${key}"`,
+        `(parent="${key}" OR "Epic Link"="${key}")`,
         "--raw",
       ]);
       if (result.code !== 0) {
@@ -141,7 +141,7 @@ export function createJiraCli(
         "issue",
         "list",
         "-q",
-        `parent in (${list}) OR "Epic Link" in (${list})`,
+        `(parent in (${list}) OR "Epic Link" in (${list}))`,
         "--raw",
       ]);
       if (result.code !== 0) {

@@ -240,6 +240,34 @@ test("Cards keep an Epic key from Epic Link", () => {
   expect(board.columns[0].cards[0].epic).toBe("DEMO-1");
 });
 
+test("Cards keep an Epic key from parentEpic", () => {
+  const board = issuesToBoard([
+    {
+      key: "DEMO-2",
+      fields: {
+        summary: "Linked",
+        status: { name: "To Do" },
+        parentEpic: { key: "DEMO-1" },
+      },
+    },
+  ]);
+  expect(board.columns[0].cards[0].epic).toBe("DEMO-1");
+});
+
+test("Cards keep an Epic key from a customfield issue key", () => {
+  const board = issuesToBoard([
+    {
+      key: "DEMO-2",
+      fields: {
+        summary: "Linked",
+        status: { name: "To Do" },
+        customfield_10014: "DEMO-1",
+      },
+    },
+  ]);
+  expect(board.columns[0].cards[0].epic).toBe("DEMO-1");
+});
+
 test("a child without parent has no Epic key", () => {
   const board = issuesToBoard([
     {

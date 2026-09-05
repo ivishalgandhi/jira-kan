@@ -126,7 +126,7 @@ test("createJiraCli lists Epic children with parent or Epic Link", async () => {
     "issue",
     "list",
     "-q",
-    'parent="DEMO-1" OR "Epic Link"="DEMO-1"',
+    '(parent="DEMO-1" OR "Epic Link"="DEMO-1")',
     "--raw",
   ]);
 });
@@ -139,7 +139,7 @@ test("createJiraCli lists children of every Epic in one call", async () => {
     "issue",
     "list",
     "-q",
-    'parent in ("DEMO-1", "DEMO-8") OR "Epic Link" in ("DEMO-1", "DEMO-8")',
+    '(parent in ("DEMO-1", "DEMO-8") OR "Epic Link" in ("DEMO-1", "DEMO-8"))',
     "--raw",
   ]);
 });

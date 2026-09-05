@@ -32,6 +32,22 @@ function stampMissingEpic(board: Board, epic: string): Board {
   return board;
 }
 
+function stampRawParent(raw: unknown, epic: string): unknown[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((issue) => {
+    if (!issue || typeof issue !== "object") return issue;
+    const current = issue as { fields?: Record<string, unknown> };
+    const fields = current.fields;
+    if (!fields || typeof fields !== "object" || fields.parent) return issue;
+    return { ...current, fields: { ...fields, parent: { key: epic } } };
+  });
+}
+
+function cardsOf(raw: unknown): Card[] {
+  if (!Array.isArray(raw)) return [];
+  return issuesToBoard(raw).columns.flatMap((column) => column.cards);
+}
+
 export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
   const cli = opts.cli ?? createStoreCli(opts.store);
   let flags = DEFAULT_FLAGS;
@@ -86,6 +102,14 @@ export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
       const keys = listedEpicKeys();
       try {
         childrenRaw = JSON.parse(await cli.listChildren(keys));
+        const cards = cardsOf(childrenRaw);
+        if (cards.length > 0 && !cards.some((card) => card.epic)) {
+          const stamped: unknown[] = [];
+          for (const key of keys) {
+            stamped.push(...stampRawParent(JSON.parse(await cli.listEpic(key)), key));
+          }
+          childrenRaw = stamped;
+        }
         hasChildrenCache = true;
       } catch (err) {
         hasChildrenCache = false;
@@ -105,12 +129,10 @@ export function createApp(opts: { store: IssueStore; cli?: Cli }): App {
             })),
           ]),
         );
-        return {
-          columns: Object.entries(cards)
-            .filter(([, list]) => list.length)
-            .map(([title, list]) => ({ id: title, title, cards: list })),
-          epics: [],
-        };
+        const columns = Object.entries(cards)
+          .filter(([, list]) => list.length)
+          .map(([title, list]) => ({ id: title, title, cards: list }));
+        if (columns.length) return { columns, epics: [] };
       }
       return stampMissingEpic(issuesToBoard(JSON.parse(await cli.listEpic(epic))), epic);
     },
